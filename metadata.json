@@ -1,0 +1,6 @@
+{
+  "name": "CU Services Portal",
+  "description": "Central services portal directory for University of Chittagong (services.cu.ac.bd) featuring categorized service portals, student & faculty services, landscape logo cards, and authenticated administrative management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

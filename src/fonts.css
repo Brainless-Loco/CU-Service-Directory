@@ -1,0 +1,50 @@
+/**
+ * ============================================================================
+ * CU Services Portal - Typography Stylesheet & CSS Variables
+ * ============================================================================
+ * 
+ * Change fonts easily by modifying the CSS variables in the :root selector below.
+ * Any update here will automatically reflect across the entire portal.
+ */
+
+:root {
+  /* --------------------------------------------------------------------------
+     1. ENGLISH FONTS (Modify to change English typeface)
+     -------------------------------------------------------------------------- */
+  --font-english: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-english-display: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-english-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* --------------------------------------------------------------------------
+     2. BANGLA FONTS (Modify to change Bengali typeface)
+     -------------------------------------------------------------------------- */
+  --font-bangla-sans: 'Noto Sans Bengali', 'Hind Siliguri', 'SolaimanLipi', 'Siyam Rupali', sans-serif;
+  --font-bangla-serif: 'Noto Serif Bengali', 'Kalpurush', 'SolaimanLipi', serif;
+  --font-bangla-heading: 'Noto Serif Bengali', 'Kalpurush', serif;
+}
+
+/* Default Body Typography */
+body {
+  font-family: var(--font-english);
+}
+
+/* Reusable Font Classes for Components */
+.font-english {
+  font-family: var(--font-english);
+}
+
+.font-english-mono {
+  font-family: var(--font-english-mono);
+}
+
+.font-bangla {
+  font-family: var(--font-bangla-sans);
+}
+
+.font-bangla-serif {
+  font-family: var(--font-bangla-serif);
+}
+
+.font-bangla-heading {
+  font-family: var(--font-bangla-heading);
+}
