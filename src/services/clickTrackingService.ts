@@ -11,61 +11,8 @@ const getDeviceType = (): 'desktop' | 'mobile' | 'tablet' => {
   return 'desktop';
 };
 
-// Realistic seed data across the last 14 days so infographics have rich visual charts right away
-export const generateSeedClicks = (customServices?: any[], countMultiplier: number = 1): ServiceClickEvent[] => {
-  const seeds: ServiceClickEvent[] = [];
-  const defaultServices = [
-    { id: 'srv-admission', title: 'Undergraduate Admission Portal', url: 'https://admission.cu.ac.bd', baseWeight: 45 },
-    { id: 'srv-student-portal', title: 'Student Management System (CU-SMS)', url: 'https://sms.cu.ac.bd', baseWeight: 50 },
-    { id: 'srv-fac-staff', title: 'Faculty & Employee Portal', url: 'https://staff.cu.ac.bd', baseWeight: 28 },
-    { id: 'srv-exam-controller', title: 'Exam Controller Results Portal', url: 'https://results.cu.ac.bd', baseWeight: 40 },
-    { id: 'srv-ict-email', title: 'CU Webmail & G-Suite Gateway', url: 'https://mail.cu.ac.bd', baseWeight: 35 },
-    { id: 'srv-digital-library', title: 'Central Library E-Repository', url: 'https://library.cu.ac.bd', baseWeight: 22 },
-    { id: 'srv-research-journal', title: 'Research & Publications Repository', url: 'https://journal.cu.ac.bd', baseWeight: 15 },
-    { id: 'srv-convocation', title: 'Convocation Portal (Coming Soon)', url: 'https://convocation.cu.ac.bd', baseWeight: 8 },
-  ];
-
-  const services = customServices && customServices.length > 0
-    ? customServices.map((s) => ({ id: s.id, title: s.title, url: s.portalUrl || 'https://services.cu.ac.bd', baseWeight: 30 }))
-    : defaultServices;
-
-  const now = Date.now();
-  const devices: ('desktop' | 'mobile' | 'tablet')[] = ['desktop', 'desktop', 'mobile', 'mobile', 'tablet'];
-
-  // Spread events over past 14 days
-  for (let dayOffset = 13; dayOffset >= 0; dayOffset--) {
-    const dayTimestamp = now - dayOffset * 86400000;
-    const isWeekend = new Date(dayTimestamp).getDay() === 5 || new Date(dayTimestamp).getDay() === 6; // Friday/Saturday in BD
-    const dayMultiplier = (isWeekend ? 0.6 : 1.2) * (countMultiplier > 1 ? countMultiplier / 20 : 1);
-
-    services.forEach((service) => {
-      const clickCount = Math.max(1, Math.floor((service.baseWeight * dayMultiplier * (0.7 + Math.random() * 0.6)) / 3));
-      for (let i = 0; i < clickCount; i++) {
-        // Random hour distributed around university working hours (8 AM - 10 PM)
-        const hour = Math.floor(Math.random() * 14) + 8; // 8:00 to 22:00
-        const minute = Math.floor(Math.random() * 60);
-        const eventDate = new Date(dayTimestamp);
-        eventDate.setHours(hour, minute, Math.floor(Math.random() * 60));
-
-        seeds.push({
-          id: `click-${dayOffset}-${service.id}-${i}-${Math.random().toString(36).substring(2, 6)}`,
-          serviceId: service.id,
-          serviceTitle: service.title,
-          portalUrl: service.url,
-          timestamp: eventDate.toISOString(),
-          deviceType: devices[Math.floor(Math.random() * devices.length)],
-          ipAddress: `103.113.152.${Math.floor(Math.random() * 220) + 10}`,
-        });
-      }
-    });
-  }
-
-  // Sort by timestamp descending
-  return seeds.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-};
-
 /**
- * Load stored click events from localStorage or initialize with seed data
+ * Load locally cached click events.
  */
 export const getStoredClicks = (): ServiceClickEvent[] => {
   try {
@@ -80,13 +27,7 @@ export const getStoredClicks = (): ServiceClickEvent[] => {
     console.error('Failed to load stored clicks', e);
   }
 
-  const initialSeeds = generateSeedClicks();
-  try {
-    localStorage.setItem(STORAGE_KEY_CLICKS, JSON.stringify(initialSeeds));
-  } catch (e) {
-    console.error('Failed to save initial seed clicks', e);
-  }
-  return initialSeeds;
+  return [];
 };
 
 /**
@@ -104,7 +45,6 @@ export const recordServiceClick = (
     portalUrl: portalUrl || 'https://services.cu.ac.bd',
     timestamp: new Date().toISOString(),
     deviceType: getDeviceType(),
-    ipAddress: `103.113.152.${Math.floor(Math.random() * 220) + 10}`,
   };
 
   try {
@@ -131,16 +71,10 @@ export const clearRecordedClicks = (): ServiceClickEvent[] => {
 };
 
 /**
- * Reset click logs with fresh seed data
+ * Clear locally cached click logs.
  */
 export const resetClickLogs = (): ServiceClickEvent[] => {
-  const seeds = generateSeedClicks();
-  try {
-    localStorage.setItem(STORAGE_KEY_CLICKS, JSON.stringify(seeds));
-  } catch (e) {
-    console.error('Failed to reset clicks', e);
-  }
-  return seeds;
+  return clearRecordedClicks();
 };
 
 /**

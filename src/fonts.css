@@ -18,9 +18,9 @@
   /* --------------------------------------------------------------------------
      2. BANGLA FONTS (Modify to change Bengali typeface)
      -------------------------------------------------------------------------- */
-  --font-bangla-sans: 'Noto Sans Bengali', 'Hind Siliguri', 'SolaimanLipi', 'Siyam Rupali', sans-serif;
-  --font-bangla-serif: 'Noto Serif Bengali', 'Kalpurush', 'SolaimanLipi', serif;
-  --font-bangla-heading: 'Noto Serif Bengali', 'Kalpurush', serif;
+  --font-bangla-sans: 'SolaimanLipi', 'Noto Sans Bengali', 'Hind Siliguri', 'Siyam Rupali', sans-serif;
+  --font-bangla-serif: 'SolaimanLipi', 'Noto Serif Bengali', 'Kalpurush', serif;
+  --font-bangla-heading: 'SolaimanLipi', 'Noto Serif Bengali', 'Kalpurush', serif;
 }
 
 /* Default Body Typography */

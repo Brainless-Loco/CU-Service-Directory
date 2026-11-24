@@ -42,10 +42,6 @@ const request = async <T>(path: string, options: RequestInit = {}, token?: strin
 
 export const api = {
   getPublicBootstrap: () => request<PublicBootstrap>('/bootstrap'),
-  initializeBootstrap: (payload: Omit<AdminBootstrap, 'initialized'>) => request<{ initialized: boolean }>('/bootstrap', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  }),
   login: (email: string, password: string) => request<AdminAuthState>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
@@ -67,9 +63,8 @@ export const api = {
   clearClicks: (token: string) => request<void>('/admin/clicks', { method: 'DELETE' }, token),
   getAuditLogs: (token: string) => request<AdminAuditLog[]>('/admin/audit-logs', {}, token),
   clearAuditLogs: (token: string) => request<void>('/admin/audit-logs', { method: 'DELETE' }, token),
-  resetPortal: (payload: Pick<AdminBootstrap, 'services' | 'groups' | 'notices' | 'users' | 'clicks'>, token: string) => request<{ ok: boolean }>('/admin/reset', {
+  resetPortal: (token: string) => request<{ ok: boolean }>('/admin/reset', {
     method: 'POST',
-    body: JSON.stringify(payload),
   }, token),
   saveFontSettings: (settings: PortalFontSettings, token: string) => request<PortalFontSettings>('/admin/font-settings', {
     method: 'PUT',

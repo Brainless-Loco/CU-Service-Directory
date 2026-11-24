@@ -26,7 +26,7 @@ export const Footer: React.FC = () => {
               </div>
             </div>
             <p className="text-xs sm:text-sm text-slate-600 max-w-lg leading-relaxed">
-              The official centralized services directory (<span className="font-mono font-medium text-slate-800">services.cu.ac.bd</span>) managed by the Information and Communication Technology (ICT) Cell to provide uninterrupted single-point access to digital campus portals.
+              The official centralized services directory managed by the Information and Communication Technology (ICT) Cell to provide uninterrupted single-point access to digital campus portals.
             </p>
             <div className="flex items-center gap-2 pt-1 text-2xs text-slate-600">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -108,16 +108,16 @@ export const Footer: React.FC = () => {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-2xs text-slate-600">
-          <p>© {new Date().getFullYear()} University of Chittagong. All rights reserved.</p>
-          <div className="flex items-center gap-4">
+        <div className="pt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-2xs text-slate-600">
+          <p>© {new Date().getFullYear()} ICT Cell, University of Chittagong. All rights reserved.</p>
+          {/* <div className="flex items-center gap-4">
             <span>Hosted at <strong className="font-mono text-slate-700">services.cu.ac.bd</strong></span>
             <span>•</span>
             <span className="flex items-center gap-1">
               <Shield className="w-3 h-3 text-emerald-600" />
               ICT Cell Secured
             </span>
-          </div>
+          </div> */}
         </div>
       </div>
     </footer>

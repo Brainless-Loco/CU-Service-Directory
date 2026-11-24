@@ -47,7 +47,7 @@ import {
   PortalFontSettings,
   AdminAuditLog,
 } from '../types';
-import { ROLE_PERMISSIONS, DEFAULT_DATABASE_CONFIG, MYSQL_PORTAL_DDL, getDatabaseConnectionString } from '../config/database';
+import { ROLE_PERMISSIONS, SQLITE_DB_LOCATION, SQLITE_PORTAL_DDL } from '../config/database';
 import { formatAuthenticationInfo, formatPortalDisplayUrl } from '../utils/textUtils';
 import {
   ACTIVE_FONTS,
@@ -106,7 +106,7 @@ type AdminTab =
   | 'audit_logs'
   | 'database';
 
-const FULL_SQL_DDL = MYSQL_PORTAL_DDL;
+const FULL_SQL_DDL = SQLITE_PORTAL_DDL;
 
 export const AdminPageView: React.FC<AdminPageViewProps> = ({
   auth,
@@ -459,7 +459,7 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
             }`}
           >
             <Database className="w-4 h-4" />
-            <span>MySQL Database & DDL</span>
+            <span>SQLite Database</span>
           </button>
 
           <button
@@ -1135,10 +1135,9 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
           />
         )}
 
-        {/* TAB 8: DATABASE CONFIG & MYSQL DDL DOCUMENTATION */}
+        {/* TAB 8: SQLite database details */}
         {activeTab === 'database' && (
           <div className="space-y-6">
-            {/* Database Environment Card */}
             <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-2xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2.5">
@@ -1147,13 +1146,13 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                      <span>Production MySQL 8.0+ Database Environment</span>
+                      <span>SQLite Database</span>
                       <span className="text-2xs font-mono bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full font-bold">
-                        MySQL Engine
+                        Local file
                       </span>
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Loaded from <code className="font-mono text-emerald-700">src/config/database.ts</code> with connection pooling & utf8mb4 collation
+                      The API stores portal data in a SQLite file on this server.
                     </p>
                   </div>
                 </div>
@@ -1173,57 +1172,36 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 rounded-lg"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Reset to Defaults</span>
+                      <span>Clear Portal Data</span>
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Config Parameter Matrix */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 text-xs font-mono">
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <span className="text-2xs uppercase text-slate-500 block">RDBMS Engine</span>
-                  <span className="font-bold text-slate-900">MySQL 8.0+ ({DEFAULT_DATABASE_CONFIG.client})</span>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <span className="text-2xs uppercase text-slate-500 block">Host & Port</span>
-                  <span className="font-bold text-slate-900">
-                    {DEFAULT_DATABASE_CONFIG.host}:{DEFAULT_DATABASE_CONFIG.port}
-                  </span>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <span className="text-2xs uppercase text-slate-500 block">Database Name</span>
-                  <span className="font-bold text-slate-900">{DEFAULT_DATABASE_CONFIG.database}</span>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <span className="text-2xs uppercase text-slate-500 block">Charset / Collation</span>
-                  <span className="font-bold text-emerald-700">utf8mb4_unicode_ci</span>
-                </div>
-              </div>
-
-              <div className="mt-4 p-3 bg-slate-900 text-emerald-400 font-mono text-2xs rounded-lg flex items-center justify-between overflow-x-auto">
-                <div>
-                  <span className="text-slate-500 mr-2">Connection URI:</span>
-                  <span>{getDatabaseConnectionString()}</span>
-                </div>
-                <span className="text-3xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded ml-2 whitespace-nowrap">
-                  Connection Pool: Max 10
-                </span>
+              <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm">
+                <p className="text-xs text-slate-500 mb-1">Default database file (unless SQLITE_DB_PATH is set)</p>
+                <code className="font-mono font-bold text-slate-900">{SQLITE_DB_LOCATION}</code>
+                <p className="text-xs text-slate-600 mt-3">
+                  Open this file with{' '}
+                  <a className="font-semibold text-emerald-700 underline" href="https://sqlitebrowser.org/" target="_blank" rel="noreferrer">
+                    DB Browser for SQLite
+                  </a>{' '}
+                  or SQLiteStudio on the server. Stop the API before making manual edits. This app does not expose a public database login or phpMyAdmin-style web client.
+                </p>
               </div>
             </div>
 
-            {/* DDL Documentation Preview Card */}
             <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-2xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <span>MySQL 8.0+ Production DDL Schema</span>
+                    <span>SQLite Schema</span>
                     <span className="text-2xs font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
-                      DATABASE_DESIGN.md
+                      SQLite
                     </span>
                   </h3>
                   <p className="text-xs text-slate-600 mt-1">
-                    Complete MySQL DDL with <code className="font-mono font-bold text-emerald-800">service_clicks</code>, <code className="font-mono font-bold text-emerald-800">service_health_checks</code>, <code className="font-mono font-bold text-emerald-800">admin_audit_logs</code>, <code className="font-mono font-bold text-emerald-800">portal_settings</code>, and <code className="font-mono text-slate-700">services_group</code> compatibility view.
+                    Schema used by the local API database.
                   </p>
                 </div>
                 <button
@@ -1234,12 +1212,12 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
                   {copiedDDL ? (
                     <>
                       <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      <span className="text-emerald-700 font-bold">Copied MySQL DDL!</span>
+                      <span className="text-emerald-700 font-bold">Copied SQLite schema!</span>
                     </>
                   ) : (
                     <>
                       <Copy className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Copy Full MySQL DDL</span>
+                      <span>Copy SQLite Schema</span>
                     </>
                   )}
                 </button>

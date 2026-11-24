@@ -1,41 +1,33 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {
+  clearRecords,
+  deleteRecord,
+  getDatabaseStatus,
+  getRecords,
+  getRecord,
+  getSetting,
+  initializeConfiguredAdmin,
+  saveRecord,
+  saveSetting,
+} from './database.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataFile = path.join(__dirname, 'data.json');
 const port = Number(process.env.API_PORT || 4000);
 const tokens = new Map();
+const configuredAdminCreated = initializeConfiguredAdmin();
+const timestamp = () => new Date().toISOString();
 
-const emptyStore = () => ({
-  initialized: false,
-  services: [],
-  groups: [],
-  notices: [],
-  users: [],
-  clicks: [],
-  auditLogs: [],
-  fontSettings: null,
-  healthStatuses: {},
-});
+if (configuredAdminCreated) {
+  console.log(`Created the configured SQLite administrator account for ${process.env.ADMIN_EMAIL}.`);
+}
 
-const readStore = () => {
-  try {
-    if (fs.existsSync(dataFile)) return { ...emptyStore(), ...JSON.parse(fs.readFileSync(dataFile, 'utf8')) };
-  } catch (error) {
-    console.error('Failed to read API data store:', error);
-  }
-  return emptyStore();
-};
+if (getRecords('users').length === 0) {
+  console.warn('No administrator is configured. Set ADMIN_EMAIL and ADMIN_PASSWORD to enable admin login.');
+}
 
-let store = readStore();
-const saveStore = () => fs.writeFileSync(dataFile, JSON.stringify(store, null, 2));
-const now = () => new Date().toISOString();
-
-const addAuditLog = ({ userEmail, action, targetTable, targetId, details }) => {
+const addAuditLog = ({ userEmail, action, targetTable, targetId, details, ipAddress }) => {
   const log = {
     id: `log-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
     userEmail: userEmail || 'system@cu.ac.bd',
@@ -43,11 +35,12 @@ const addAuditLog = ({ userEmail, action, targetTable, targetId, details }) => {
     targetTable,
     targetId,
     details: typeof details === 'string' ? details : JSON.stringify(details || {}),
-    ipAddress: 'server',
-    timestamp: now(),
+    ipAddress: ipAddress || null,
+    timestamp: timestamp(),
   };
-  store.auditLogs = [log, ...store.auditLogs].slice(0, 1000);
-  saveStore();
+  saveRecord('admin_audit_logs', log);
+  const oldLogs = getRecords('admin_audit_logs');
+  for (const oldLog of oldLogs.slice(1000)) deleteRecord('admin_audit_logs', oldLog.id);
   return log;
 };
 
@@ -74,90 +67,78 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-app.get('/api/health', (_request, response) => response.json({ status: 'ok', timestamp: now() }));
+app.get('/api/health', (_request, response) => {
+  response.json({ status: 'ok', timestamp: timestamp(), database: 'sqlite' });
+});
 
 app.get('/api/bootstrap', (_request, response) => {
   response.json({
-    initialized: store.initialized,
-    services: store.services,
-    groups: store.groups,
-    notices: store.notices,
-    fontSettings: store.fontSettings,
+    initialized: true,
+    services: getRecords('services'),
+    groups: getRecords('service_groups'),
+    notices: getRecords('portal_notices'),
+    fontSettings: getSetting('fontSettings'),
   });
 });
 
-app.post('/api/bootstrap', (request, response) => {
-  if (!store.initialized) {
-    const payload = request.body || {};
-    store = {
-      ...store,
-      initialized: true,
-      services: Array.isArray(payload.services) ? payload.services : [],
-      groups: Array.isArray(payload.groups) ? payload.groups : [],
-      notices: Array.isArray(payload.notices) ? payload.notices : [],
-      users: Array.isArray(payload.users) ? payload.users : [],
-      clicks: Array.isArray(payload.clicks) ? payload.clicks : [],
-      auditLogs: Array.isArray(payload.auditLogs) ? payload.auditLogs : [],
-      fontSettings: payload.fontSettings || null,
-      healthStatuses: payload.healthStatuses || {},
-    };
-    saveStore();
-  }
-  response.json({ initialized: store.initialized });
+app.get('/api/admin/bootstrap', requireAuth, (_request, response) => {
+  response.json({
+    services: getRecords('services'),
+    groups: getRecords('service_groups'),
+    notices: getRecords('portal_notices'),
+    users: getRecords('users'),
+    clicks: getRecords('service_clicks'),
+    auditLogs: getRecords('admin_audit_logs'),
+    fontSettings: getSetting('fontSettings'),
+    healthStatuses: getSetting('healthStatuses', {}),
+  });
+});
+
+app.get('/api/admin/database-status', requireAuth, requireSuperAdmin, (_request, response) => {
+  response.json(getDatabaseStatus());
 });
 
 app.post('/api/auth/login', (request, response) => {
   const email = String(request.body?.email || '').trim().toLowerCase();
-  const password = String(request.body?.password || '').trim();
-  const matchedUser = store.users.find((user) => user.email.toLowerCase() === email);
-  let role = null;
-  let fullName = email;
-
-  if (matchedUser) {
-    if (!matchedUser.isActive) return response.status(403).json({ error: 'This administrative user account is inactive.' });
-    if (matchedUser.passwordPlain === password) {
-      role = matchedUser.role;
-      fullName = matchedUser.fullName;
-    }
-  } else if ((email === 'tonmoy.ict@cu.ac.bd' || email === 'admin@cu.ac.bd') && (password === 'cu@admin2026' || password === 'admin123')) {
-    role = 'SUPER_ADMIN';
-    fullName = 'Tonmoy (Lead System Architect)';
+  const password = String(request.body?.password || '');
+  const matchedUser = getRecords('users').find((user) => user.email.toLowerCase() === email);
+  if (!matchedUser || !matchedUser.isActive || matchedUser.passwordPlain !== password) {
+    return response.status(401).json({ error: 'Invalid administrative credentials.' });
   }
-
-  if (!role) return response.status(401).json({ error: 'Invalid administrative credentials.' });
 
   const token = crypto.randomBytes(32).toString('hex');
   const auth = {
     isAuthenticated: true,
     userEmail: email,
-    role,
-    fullName,
+    role: matchedUser.role,
+    fullName: matchedUser.fullName,
     token,
-    lastLogin: now(),
+    lastLogin: timestamp(),
   };
   tokens.set(token, auth);
-  addAuditLog({ userEmail: email, action: 'ADMIN_LOGIN', targetTable: 'users', targetId: email, details: { role, status: 'SUCCESS' } });
+  addAuditLog({
+    userEmail: email,
+    action: 'ADMIN_LOGIN',
+    targetTable: 'users',
+    targetId: matchedUser.id,
+    details: { role: matchedUser.role, status: 'SUCCESS' },
+    ipAddress: request.ip,
+  });
   response.json(auth);
 });
 
 app.post('/api/auth/logout', requireAuth, (request, response) => {
   const token = request.headers.authorization?.replace(/^Bearer\s+/i, '');
   tokens.delete(token);
-  addAuditLog({ userEmail: request.adminUser.userEmail, action: 'ADMIN_LOGOUT', targetTable: 'users', targetId: request.adminUser.userEmail, details: { role: request.adminUser.role } });
-  response.status(204).end();
-});
-
-app.get('/api/admin/bootstrap', requireAuth, (request, response) => {
-  response.json({
-    services: store.services,
-    groups: store.groups,
-    notices: store.notices,
-    users: store.users,
-    clicks: store.clicks,
-    auditLogs: store.auditLogs,
-    fontSettings: store.fontSettings,
-    healthStatuses: store.healthStatuses,
+  addAuditLog({
+    userEmail: request.adminUser.userEmail,
+    action: 'ADMIN_LOGOUT',
+    targetTable: 'users',
+    targetId: request.adminUser.userEmail,
+    details: { role: request.adminUser.role },
+    ipAddress: request.ip,
   });
+  response.status(204).end();
 });
 
 const collectionConfig = {
@@ -168,73 +149,123 @@ const collectionConfig = {
 };
 
 for (const [collection, config] of Object.entries(collectionConfig)) {
-  app.post(`/api/admin/${collection}`, requireAuth, config.superadmin ? requireSuperAdmin : (_request, _response, next) => next(), (request, response) => {
+  const table = config.table;
+  const authorization = config.superadmin
+    ? [requireAuth, requireSuperAdmin]
+    : [requireAuth];
+
+  app.post(`/api/admin/${collection}`, ...authorization, (request, response) => {
     const item = request.body;
     if (!item?.id) return response.status(400).json({ error: 'A record id is required.' });
-    const exists = store[collection].some((entry) => entry.id === item.id);
-    store[collection] = exists
-      ? store[collection].map((entry) => (entry.id === item.id ? item : entry))
-      : [item, ...store[collection]];
-    saveStore();
-    addAuditLog({ userEmail: request.adminUser.userEmail, action: exists ? config.update : config.create, targetTable: config.table, targetId: item.id, details: item });
+
+    const exists = Boolean(getRecord(table, item.id));
+    saveRecord(table, item);
+    const auditDetails = collection === 'users'
+      ? { ...item, passwordPlain: '***' }
+      : item;
+    addAuditLog({
+      userEmail: request.adminUser.userEmail,
+      action: exists ? config.update : config.create,
+      targetTable: table,
+      targetId: item.id,
+      details: auditDetails,
+      ipAddress: request.ip,
+    });
     response.json(item);
   });
 
-  app.delete(`/api/admin/${collection}/:id`, requireAuth, config.superadmin ? requireSuperAdmin : (_request, _response, next) => next(), (request, response) => {
-    const existing = store[collection].find((entry) => entry.id === request.params.id);
+  app.delete(`/api/admin/${collection}/:id`, ...authorization, (request, response) => {
+    const existing = getRecord(table, request.params.id);
     if (!existing) return response.status(404).json({ error: 'Record not found.' });
-    store[collection] = store[collection].filter((entry) => entry.id !== request.params.id);
-    saveStore();
-    addAuditLog({ userEmail: request.adminUser.userEmail, action: config.delete, targetTable: config.table, targetId: request.params.id, details: existing });
+
+    deleteRecord(table, request.params.id);
+    addAuditLog({
+      userEmail: request.adminUser.userEmail,
+      action: config.delete,
+      targetTable: table,
+      targetId: request.params.id,
+      details: collection === 'users' ? { ...existing, passwordPlain: '***' } : existing,
+      ipAddress: request.ip,
+    });
     response.status(204).end();
   });
 }
 
-app.get('/api/admin/audit-logs', requireAuth, (request, response) => response.json(store.auditLogs));
-app.delete('/api/admin/audit-logs', requireAuth, (request, response) => {
-  store.auditLogs = [];
-  saveStore();
+app.get('/api/admin/audit-logs', requireAuth, (_request, response) => {
+  response.json(getRecords('admin_audit_logs'));
+});
+
+app.delete('/api/admin/audit-logs', requireAuth, (_request, response) => {
+  clearRecords('admin_audit_logs');
   response.status(204).end();
 });
 
 app.post('/api/admin/reset', requireAuth, requireSuperAdmin, (request, response) => {
-  const payload = request.body || {};
-  store.services = Array.isArray(payload.services) ? payload.services : [];
-  store.groups = Array.isArray(payload.groups) ? payload.groups : [];
-  store.notices = Array.isArray(payload.notices) ? payload.notices : [];
-  store.users = Array.isArray(payload.users) ? payload.users : [];
-  store.clicks = Array.isArray(payload.clicks) ? payload.clicks : [];
-  store.auditLogs = [];
-  saveStore();
-  addAuditLog({ userEmail: request.adminUser.userEmail, action: 'PORTAL_FACTORY_RESET', targetTable: 'portal_settings', targetId: 'factory_reset', details: { reset: true } });
+  clearRecords('services');
+  clearRecords('service_groups');
+  clearRecords('portal_notices');
+  clearRecords('service_clicks');
+  clearRecords('admin_audit_logs');
+  saveSetting('fontSettings', null);
+  saveSetting('healthStatuses', {});
+  addAuditLog({
+    userEmail: request.adminUser.userEmail,
+    action: 'PORTAL_RESET',
+    targetTable: 'portal_settings',
+    targetId: 'factory_reset',
+    details: { reset: true },
+    ipAddress: request.ip,
+  });
   response.json({ ok: true });
 });
 
 app.post('/api/clicks', (request, response) => {
-  const click = { ...request.body, id: request.body?.id || `click-${Date.now()}`, timestamp: request.body?.timestamp || now() };
-  store.clicks = [click, ...store.clicks].slice(0, 5000);
-  saveStore();
+  const click = {
+    ...request.body,
+    id: request.body?.id || `click-${Date.now()}`,
+    timestamp: request.body?.timestamp || timestamp(),
+    ipAddress: request.ip,
+  };
+  saveRecord('service_clicks', click);
+  const clicks = getRecords('service_clicks');
+  for (const oldClick of clicks.slice(5000)) deleteRecord('service_clicks', oldClick.id);
   response.status(201).json(click);
 });
 
-app.get('/api/admin/clicks', requireAuth, (_request, response) => response.json(store.clicks));
+app.get('/api/admin/clicks', requireAuth, (_request, response) => {
+  response.json(getRecords('service_clicks'));
+});
+
 app.delete('/api/admin/clicks', requireAuth, (_request, response) => {
-  store.clicks = [];
-  saveStore();
+  clearRecords('service_clicks');
   response.status(204).end();
 });
 
 app.put('/api/admin/font-settings', requireAuth, (request, response) => {
-  store.fontSettings = request.body;
-  saveStore();
-  addAuditLog({ userEmail: request.adminUser.userEmail, action: 'FONT_CONFIG_UPDATE', targetTable: 'portal_settings', targetId: 'typography', details: request.body });
-  response.json(store.fontSettings);
+  const fontSettings = saveSetting('fontSettings', request.body);
+  addAuditLog({
+    userEmail: request.adminUser.userEmail,
+    action: 'FONT_CONFIG_UPDATE',
+    targetTable: 'portal_settings',
+    targetId: 'typography',
+    details: fontSettings,
+    ipAddress: request.ip,
+  });
+  response.json(fontSettings);
 });
 
 app.put('/api/admin/health-statuses', requireAuth, (request, response) => {
-  store.healthStatuses = request.body || {};
-  saveStore();
-  response.json(store.healthStatuses);
+  response.json(saveSetting('healthStatuses', request.body || {}));
 });
 
-app.listen(port, () => console.log(`CU Services API listening on http://localhost:${port}`));
+app.use((error, _request, response, _next) => {
+  if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    return response.status(409).json({ error: 'A record with that email already exists.' });
+  }
+  console.error('API request failed:', error);
+  response.status(500).json({ error: 'The request could not be completed.' });
+});
+
+app.listen(port, () => {
+  console.log(`CU Services API listening on http://localhost:${port} (SQLite: ${getDatabaseStatus().file})`);
+});

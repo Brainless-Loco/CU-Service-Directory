@@ -107,7 +107,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ logs, onClearLogs 
               Administrative Audit Ledger (admin_audit_logs)
             </h3>
             <span className="px-2 py-0.5 text-2xs font-mono font-bold bg-slate-100 text-slate-700 rounded-md border border-slate-200">
-              MySQL 8.0+
+              SQLite
             </span>
           </div>
           <p className="text-xs text-slate-500">
@@ -155,7 +155,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ logs, onClearLogs 
         <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
           <span className="text-2xs font-semibold uppercase text-slate-500">Primary Admin</span>
           <p className="text-xs font-mono font-bold text-slate-800 mt-2 truncate">
-            {logs[0]?.userEmail || 'tonmoy.ict@cu.ac.bd'}
+            {logs[0]?.userEmail || 'No activity yet'}
           </p>
         </div>
       </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Upload, Link2, AlertCircle } from 'lucide-react';
 import { ServiceItem, ServiceGroup, LogoRatio, ServiceStatus } from '../types';
 import { validateWordCount, truncateToMaxWords, fileToBase64 } from '../utils/textUtils';
-import { createLandscapeLogoSvg } from '../data/seedData';
+import { createLandscapeLogoSvg } from '../utils/logoUtils';
 
 interface ServiceModalProps {
   isOpen: boolean;
@@ -149,6 +149,11 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
       return;
     }
 
+    if (!groupId) {
+      setFormError('Select a service group before saving this portal.');
+      return;
+    }
+
     // Portal URL is required EXCEPT when status === 'COMING_SOON'
     const isComingSoon = status === 'COMING_SOON';
     if (!isComingSoon && (!portalUrl.trim() || portalUrl === 'https://')) {
@@ -170,7 +175,7 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
       id: serviceToEdit ? serviceToEdit.id : 'srv-' + Date.now(),
       title: title.trim(),
       description: description.trim(),
-      groupId: groupId || groups[0]?.id || 'group-student',
+      groupId,
       portalUrl: portalUrl.trim() || undefined,
       logoUrl: logoUrl || createLandscapeLogoSvg(title, 'CU Official Service', `${bgColor},#0f172a`, '#38bdf8'),
       logoRatio,

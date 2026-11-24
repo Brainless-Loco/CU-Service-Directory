@@ -25,12 +25,6 @@ import {
   PortalFontSettings,
   AdminAuditLog,
 } from './types';
-import {
-  INITIAL_GROUPS,
-  INITIAL_SERVICES,
-  INITIAL_NOTICES,
-  INITIAL_USERS,
-} from './data/seedData';
 import { Header } from './components/Header';
 import { NoticeBanner } from './components/NoticeBanner';
 import { ServiceCard } from './components/ServiceCard';
@@ -41,16 +35,12 @@ import { NoticeModal } from './components/NoticeModal';
 import { UserModal } from './components/UserModal';
 import { GroupModal } from './components/GroupModal';
 import { Footer } from './components/Footer';
-import { getStoredClicks, recordServiceClick, resetClickLogs } from './services/clickTrackingService';
+import { getStoredClicks, recordServiceClick, clearRecordedClicks } from './services/clickTrackingService';
 import { getStoredHealthStatuses, pingServicePortal, pingAllServices } from './services/healthCheckService';
 import { getStoredAuditLogs, recordAuditLog, resetAuditLogs } from './services/auditLogService';
 import { loadPersistedFonts, persistFontSettings, applyFontsGlobally } from './config/fonts';
 import { api } from './services/api';
 
-const STORAGE_KEY_SERVICES = 'cu_services_items_v3';
-const STORAGE_KEY_GROUPS = 'cu_services_groups_v3';
-const STORAGE_KEY_NOTICES = 'cu_services_notices_v3';
-const STORAGE_KEY_USERS = 'cu_services_users_v3';
 const STORAGE_KEY_AUTH = 'cu_services_admin_auth_v3';
 type AppRoute = '/' | '/admin/auth' | '/admin/dashboard' | '/not-found';
 
@@ -72,60 +62,16 @@ export default function App() {
   };
 
   // Services State
-  const [services, setServices] = useState<ServiceItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_SERVICES);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Failed to load saved services', e);
-    }
-    return INITIAL_SERVICES;
-  });
+  const [services, setServices] = useState<ServiceItem[]>([]);
 
   // Groups State
-  const [groups, setGroups] = useState<ServiceGroup[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_GROUPS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Failed to load saved groups', e);
-    }
-    return INITIAL_GROUPS;
-  });
+  const [groups, setGroups] = useState<ServiceGroup[]>([]);
 
   // Notices State
-  const [notices, setNotices] = useState<PortalNotice[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_NOTICES);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Failed to load saved notices', e);
-    }
-    return INITIAL_NOTICES;
-  });
+  const [notices, setNotices] = useState<PortalNotice[]>([]);
 
   // Users State
-  const [users, setUsers] = useState<AdminUser[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_USERS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Failed to load saved users', e);
-    }
-    return INITIAL_USERS;
-  });
+  const [users, setUsers] = useState<AdminUser[]>([]);
 
   // Admin Authentication State
   const [adminAuth, setAdminAuth] = useState<AdminAuthState>(() => {
@@ -175,24 +121,13 @@ export default function App() {
     applyFontsGlobally(fontSettings);
   }, [fontSettings]);
 
-  // Hydrate the local UI from the API and initialize the file-backed store once.
+  // Hydrate the UI from SQLite; the browser is not a source of database records.
   useEffect(() => {
     let active = true;
     const hydrate = async () => {
       try {
         const publicData = await api.getPublicBootstrap();
-        if (!publicData.initialized) {
-          await api.initializeBootstrap({
-            services,
-            groups,
-            notices,
-            users,
-            clicks,
-            auditLogs,
-            fontSettings,
-            healthStatuses,
-          });
-        } else if (active) {
+        if (active) {
           setServices(publicData.services);
           setGroups(publicData.groups);
           setNotices(publicData.notices);
@@ -212,7 +147,7 @@ export default function App() {
           if (adminData.fontSettings) setFontSettings(adminData.fontSettings);
         }
       } catch (error) {
-        console.error('API unavailable; continuing with local fallback data.', error);
+        console.error('Failed to load portal data from the SQLite API.', error);
         if (adminAuth.token && error instanceof Error && error.message.includes('401')) {
           localStorage.removeItem(STORAGE_KEY_AUTH);
           setAdminAuth({ isAuthenticated: false, userEmail: null, role: 'MAINTENANCE_VIEWER' });
@@ -327,39 +262,6 @@ export default function App() {
       api.clearAuditLogs(adminAuth.token).catch((error) => console.error('Failed to clear audit logs', error));
     }
   };
-
-  // Persistence Effects
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_SERVICES, JSON.stringify(services));
-    } catch (e) {
-      console.error('Failed to persist services', e);
-    }
-  }, [services]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_GROUPS, JSON.stringify(groups));
-    } catch (e) {
-      console.error('Failed to persist groups', e);
-    }
-  }, [groups]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_NOTICES, JSON.stringify(notices));
-    } catch (e) {
-      console.error('Failed to persist notices', e);
-    }
-  }, [notices]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
-    } catch (e) {
-      console.error('Failed to persist users', e);
-    }
-  }, [users]);
 
   // Auth Handlers
   const handleLoginSuccess = (auth: AdminAuthState) => {
@@ -725,33 +627,24 @@ export default function App() {
     }
   };
 
-  // Reset to Defaults
+  // Clear portal records while retaining the administrator accounts.
   const handleResetToDefaults = () => {
-    if (window.confirm('Reset all portal records, notices, and users to factory seed state?')) {
-      setServices(INITIAL_SERVICES);
-      setGroups(INITIAL_GROUPS);
-      setNotices(INITIAL_NOTICES);
-      setUsers(INITIAL_USERS);
-      const freshClicks = resetClickLogs();
-      setClicks(freshClicks);
-      const freshLogs = resetAuditLogs();
-      setAuditLogs(freshLogs);
-      localStorage.removeItem(STORAGE_KEY_SERVICES);
-      localStorage.removeItem(STORAGE_KEY_GROUPS);
-      localStorage.removeItem(STORAGE_KEY_NOTICES);
-      localStorage.removeItem(STORAGE_KEY_USERS);
-
-      const log = recordAuditLog({
-        userEmail: adminAuth.userEmail,
-        action: 'PORTAL_FACTORY_RESET',
-        targetTable: 'portal_settings',
-        targetId: 'factory_reset',
-        details: { reset: true },
-      });
-      setAuditLogs((prev) => [log, ...prev]);
-      if (adminAuth.token) {
-        api.resetPortal({ services: INITIAL_SERVICES, groups: INITIAL_GROUPS, notices: INITIAL_NOTICES, users: INITIAL_USERS, clicks: freshClicks }, adminAuth.token)
-          .catch((error) => console.error('Failed to reset portal through API', error));
+    if (window.confirm('Delete all services, groups, notices, clicks, audit logs, and portal settings? Administrator accounts will be kept.')) {
+      setServices([]);
+      setGroups([]);
+      setNotices([]);
+      setClicks([]);
+      setAuditLogs([]);
+      clearRecordedClicks();
+      const token = adminAuth.token;
+      if (token) {
+        api.resetPortal(token).then(() => api.getAdminBootstrap(token))
+          .then((data) => {
+            setAuditLogs(data.auditLogs);
+            setHealthStatuses(data.healthStatuses);
+            setFontSettings(data.fontSettings || loadPersistedFonts());
+          })
+          .catch((error) => console.error('Failed to clear portal data in SQLite', error));
       }
     }
   };
@@ -895,7 +788,6 @@ export default function App() {
         isPage
         onClose={() => navigate('/')}
         onLoginSuccess={handleLoginSuccess}
-        users={users}
       />
     );
   }
@@ -948,7 +840,7 @@ export default function App() {
       {/* Main Portal Canvas - Clean White Background */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 bg-white">
         {/* Welcome & Domain Identity Card */}
-        <section className="mb-8 p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* <section className="mb-8 p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
@@ -977,7 +869,7 @@ export default function App() {
               </button>
             )}
           </div>
-        </section>
+        </section> */}
 
         {/* Category Navigation Pills Bar */}
         <section className="mb-8">

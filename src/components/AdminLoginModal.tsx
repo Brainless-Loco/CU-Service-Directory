@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Lock, Mail, ShieldAlert, X, KeyRound, ShieldCheck } from 'lucide-react';
-import { AdminAuthState, AdminUser } from '../types';
+import { Lock, Mail, ShieldAlert, X, KeyRound } from 'lucide-react';
+import { AdminAuthState } from '../types';
 import { api } from '../services/api';
 
 interface AdminLoginModalProps {
@@ -8,7 +8,6 @@ interface AdminLoginModalProps {
   isPage?: boolean;
   onClose: () => void;
   onLoginSuccess: (auth: AdminAuthState) => void;
-  users: AdminUser[];
 }
 
 export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
@@ -16,10 +15,9 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   isPage = false,
   onClose,
   onLoginSuccess,
-  users,
 }) => {
-  const [email, setEmail] = useState('tonmoy.ict@cu.ac.bd');
-  const [password, setPassword] = useState('cu@admin2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -40,12 +38,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSelectQuickAccount = (user: AdminUser) => {
-    setEmail(user.email);
-    setPassword(user.passwordPlain);
-    setError(null);
   };
 
   return (
@@ -73,36 +65,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           <p className="text-xs text-slate-500 mt-1">
             Access University of Chittagong Administrative Management Console
           </p>
-        </div>
-
-        {/* Quick Credentials Tester Bar */}
-        <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-2xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              Quick Fill Test Accounts
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-1.5">
-            {users.slice(0, 4).map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                onClick={() => handleSelectQuickAccount(u)}
-                className={`text-left p-1.5 rounded-lg border text-2xs transition-colors ${
-                  email.toLowerCase() === u.email.toLowerCase()
-                    ? 'border-emerald-500 bg-emerald-50/80 font-bold text-emerald-950'
-                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <span className="block truncate font-semibold">{u.fullName.split(' ')[0]}</span>
-                <span className="block text-3xs font-mono text-slate-500 truncate">
-                  {u.role.replace('MAINTENANCE_', '')}
-                </span>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Error Alert */}

@@ -9,7 +9,6 @@ import {
   TrendingUp,
   Download,
   Trash2,
-  Sparkles,
   Search,
   ArrowUpRight,
   MousePointerClick,
@@ -18,10 +17,7 @@ import {
 import { ServiceClickEvent, ServiceItem } from '../../types';
 import {
   computeClickStats,
-  generateSeedClicks,
   clearRecordedClicks,
-  recordServiceClick,
-  STORAGE_KEY_CLICKS,
 } from '../../services/clickTrackingService';
 
 interface ClicksInfographicsViewProps {
@@ -58,24 +54,6 @@ export const ClicksInfographicsView: React.FC<ClicksInfographicsViewProps> = ({
       )
       .slice(0, 50);
   }, [clicks, streamFilter]);
-
-  const handleSimulateTraffic = () => {
-    const seed = generateSeedClicks(services, 45);
-    let existing: ServiceClickEvent[] = [];
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CLICKS);
-      if (saved) existing = JSON.parse(saved);
-    } catch (e) {
-      existing = [];
-    }
-    const combined = [...seed, ...existing].slice(0, 5000);
-    try {
-      localStorage.setItem(STORAGE_KEY_CLICKS, JSON.stringify(combined));
-    } catch (e) {
-      console.error('Failed to save simulated clicks', e);
-    }
-    onRefreshClicks();
-  };
 
   const handleClearClicks = () => {
     if (window.confirm('Are you sure you want to reset all click logs and infographic statistics?')) {
@@ -173,15 +151,6 @@ export const ClicksInfographicsView: React.FC<ClicksInfographicsViewProps> = ({
               30 Days
             </button>
           </div>
-
-          <button
-            onClick={handleSimulateTraffic}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors shadow-2xs"
-            title="Generate sample user clicks to populate infographics immediately"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Simulate Clicks</span>
-          </button>
 
           <button
             onClick={handleExportCsv}
@@ -463,7 +432,7 @@ export const ClicksInfographicsView: React.FC<ClicksInfographicsViewProps> = ({
 
         {topServices.length === 0 ? (
           <div className="p-6 text-center text-slate-400 text-xs">
-            No service clicks recorded yet. Click on any service in the portal or click "Simulate Clicks" above.
+            No service clicks have been recorded yet. Click a portal service to start collecting real usage data.
           </div>
         ) : (
           <div className="space-y-3">

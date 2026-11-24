@@ -88,7 +88,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </h1>
               <p className="text-xs sm:text-sm text-slate-600">
-                Single Sign-On & Central Directory for All Academic, Student & Administrative Services
+                Central Directory for All Academic, Student & Administrative Services
               </p>
             </div>
           </div>
