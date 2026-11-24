@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { ExternalLink, Copy, Check, Edit, Trash2, ArrowUpRight, Sparkles, Clock, EyeOff, Eye, Activity, MousePointerClick, RefreshCw } from 'lucide-react';
-import { ServiceItem, ServiceGroup, ServiceHealthStatus } from '../types';
-import { formatPortalDisplayUrl } from '../utils/textUtils';
+import { ServiceItem, ServiceHealthStatus } from '../types';
+import { countWords, formatPortalDisplayUrl, truncateToMaxWords } from '../utils/textUtils';
 import { isPingableWebLink } from '../services/healthCheckService';
 
 interface ServiceCardProps {
   service: ServiceItem;
-  group?: ServiceGroup;
   isAdmin: boolean;
   healthStatus?: ServiceHealthStatus;
   clickCount?: number;
@@ -19,7 +18,6 @@ interface ServiceCardProps {
 
 export const ServiceCard: React.FC<ServiceCardProps> = ({
   service,
-  group,
   isAdmin,
   healthStatus,
   clickCount,
@@ -67,6 +65,8 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
   const isWebUrl = isPingableWebLink(service.portalUrl);
   const hasUrl = Boolean(service.portalUrl && service.portalUrl.trim() !== '' && service.portalUrl !== 'https://');
   const isOnline = isWebUrl && healthStatus ? healthStatus.isLive : true;
+  const descriptionWordCount = countWords(service.description);
+  const displayDescription = truncateToMaxWords(service.description, 50);
 
   return (
     <div
@@ -85,7 +85,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
     >
       {/* Landscape Logo / Banner Display with Reliable Background Color */}
       <div
-        className={`relative w-full ${getAspectClass(service.logoRatio)} overflow-hidden border-b border-slate-100 flex items-center justify-center`}
+        className={`relative w-full overflow-hidden border-b border-slate-100 flex items-center justify-center`}
         style={{
           backgroundColor: service.bgColor || '#0f172a',
         }}
@@ -101,7 +101,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
         ) : (
           /* Fallback Landscape Emblem Banner adhering to service.bgColor */
           <div
-            className="w-full h-full flex flex-col items-center justify-center p-4 text-white"
+            className="w-full h-full flex flex-col items-center justify-center p-3 text-white"
             style={{ backgroundColor: service.bgColor || '#0f172a' }}
           >
             <div className="w-10 h-10 mb-2 p-1 bg-white/15 rounded-lg flex items-center justify-center backdrop-blur-xs shadow-xs border border-white/20">
@@ -220,50 +220,48 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
       </div>
 
       {/* Card Content */}
-      <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between">
+      <div className="p-2.5 sm:p-3 flex-1 flex flex-col justify-between">
         <div>
-          {/* Category Tag & URL Preview / Click Count */}
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-2xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-              {group?.name || 'General Service'}
-            </span>
+          <div className="flex min-w-0 flex-wrap flex-col items-baseline gap-1">
+            <h3 className="inline-flex min-w-0 max-w-[100%] truncate rounded-md border border-emerald-100 bg-emerald-50 px-2 py-1 text-sm font-bold tracking-tight text-emerald-950 transition-colors group-hover:border-emerald-200 group-hover:bg-emerald-100">
+              {service.title}
+            </h3>
 
-            <div className="flex items-center gap-2">
-              {clickCount !== undefined && clickCount > 0 && (
-                <span
-                  className="text-2xs text-slate-500 flex items-center gap-1 font-mono"
-                  title={`${clickCount} user clicks logged`}
-                >
-                  <MousePointerClick className="w-3 h-3 text-emerald-600" />
-                  <span>{clickCount}</span>
-                </span>
-              )}
+            {hasUrl ? (
+              <a
+                href={service.portalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleVisitLink}
+                title={`Visit ${service.title}: ${service.portalUrl}`}
+                className="inline-flex shrink-0 items-center gap-1 mb-1 truncate text-xs font-medium text-emerald-700 transition-colors hover:text-emerald-900 hover:underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600"
+              >
+                <span className="min-w-0 truncate">{formatPortalDisplayUrl(service.portalUrl)}</span>
+                <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+              </a>
+            ) : isComingSoon ? (
+              <span className="shrink-0 text-xs font-medium text-amber-700">In Development</span>
+            ) : null}
 
-              {hasUrl ? (
-                <span className="text-2xs font-mono text-slate-500 truncate max-w-[130px]">
-                  {formatPortalDisplayUrl(service.portalUrl)}
-                </span>
-              ) : isComingSoon ? (
-                <span className="text-2xs font-mono text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded">
-                  In Development
-                </span>
-              ) : null}
-            </div>
+            {clickCount !== undefined && clickCount > 0 && (
+              <span
+                className="ml-auto flex shrink-0 items-center gap-1 font-mono text-2xs text-slate-500"
+                title={`${clickCount} user clicks logged`}
+              >
+                <MousePointerClick className="h-3 w-3 text-emerald-600" />
+                <span>{clickCount}</span>
+              </span>
+            )}
           </div>
 
-          {/* Service Title */}
-          <h3 className="text-base font-bold text-slate-900 tracking-tight line-clamp-1 group-hover:text-emerald-800 transition-colors">
-            {service.title}
-          </h3>
-
-          {/* Description (Strict max 50 words displayed clearly) */}
-          <p className="mt-2 text-xs sm:text-sm text-slate-600 leading-relaxed line-clamp-3">
-            {service.description}
+          {/* Description displays up to 50 words without line-clamp truncation */}
+          <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-snug">
+            {displayDescription}{descriptionWordCount > 50 ? '…' : ''}
           </p>
 
           {/* Tags */}
           {service.tags && service.tags.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1">
+            <div className="mt-2 flex flex-wrap gap-1">
               {service.tags.map((tag, idx) => (
                 <span
                   key={idx}
@@ -277,10 +275,10 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
         </div>
 
         {/* Card Footer & Action Buttons */}
-        <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between gap-2">
+        <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
           {/* Direct CTA Link / Coming Soon Action */}
           {isComingSoon && !hasUrl ? (
-            <div className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs sm:text-sm font-semibold text-amber-900 bg-amber-100/90 border border-amber-300 rounded-lg select-none">
+            <div className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs sm:text-sm font-semibold text-amber-900 bg-amber-100/90 border border-amber-300 rounded-lg select-none">
               <Clock className="w-3.5 h-3.5 text-amber-700" />
               <span>Launching Soon</span>
             </div>
@@ -291,7 +289,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
               target="_blank"
               rel="noopener noreferrer"
               onClick={handleVisitLink}
-              className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs sm:text-sm font-semibold text-white rounded-lg transition-colors group/btn shadow-2xs ${
+              className={`flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs sm:text-sm font-semibold text-white rounded-lg transition-colors group/btn shadow-2xs ${
                 isComingSoon
                   ? 'bg-amber-600 hover:bg-amber-700'
                   : healthStatus && !healthStatus.isLive
@@ -303,7 +301,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
               <ArrowUpRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform" />
             </a>
           ) : (
-            <div className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-medium text-slate-500 bg-slate-100 rounded-lg">
+            <div className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-medium text-slate-500 bg-slate-100 rounded-lg">
               <span>Portal Offline</span>
             </div>
           )}

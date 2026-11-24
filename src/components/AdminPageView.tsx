@@ -70,7 +70,7 @@ interface AdminPageViewProps {
   healthStatuses?: Record<string, ServiceHealthStatus>;
   fontSettings?: PortalFontSettings;
   auditLogs?: AdminAuditLog[];
-  onRefreshClicks?: () => void;
+  onClearClicks?: () => Promise<void>;
   onUpdateFontSettings?: (settings: PortalFontSettings) => void;
   onPingService?: (serviceId: string, url: string) => Promise<void>;
   onPingAllServices?: () => Promise<void>;
@@ -118,7 +118,7 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
   healthStatuses,
   fontSettings,
   auditLogs,
-  onRefreshClicks,
+  onClearClicks,
   onUpdateFontSettings,
   onPingService,
   onPingAllServices,
@@ -180,8 +180,17 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
     const comingSoon = services.filter((s) => s.status === 'COMING_SOON').length;
     const activeNotices = notices.filter((n) => n.status === 'ACTIVE').length;
     const totalUsers = users.length;
-    return { total, active, disabled, comingSoon, activeNotices, totalUsers };
-  }, [services, notices, users]);
+    const totalClicks = clicks?.length || 0;
+    return { total, active, disabled, comingSoon, activeNotices, totalUsers, totalClicks };
+  }, [services, notices, users, clicks]);
+
+  const clickCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    clicks?.forEach((click) => {
+      counts[click.serviceId] = (counts[click.serviceId] || 0) + 1;
+    });
+    return counts;
+  }, [clicks]);
 
   // Handle copying authentication info for user
   const handleCopyAuthInfo = (user: AdminUser) => {
@@ -314,7 +323,7 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
         </div>
 
         {/* Real-time KPI Stats Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
           <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
             <span className="text-2xs font-semibold uppercase text-slate-500">Total Services</span>
             <p className="text-xl font-bold text-slate-900 mt-1">{stats.total}</p>
@@ -343,6 +352,11 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
           <div className="p-3.5 bg-white rounded-xl border border-indigo-200 shadow-2xs bg-indigo-50/20">
             <span className="text-2xs font-semibold uppercase text-indigo-700">Users & Roles</span>
             <p className="text-xl font-bold text-indigo-800 mt-1">{stats.totalUsers}</p>
+          </div>
+
+          <div className="p-3.5 bg-white rounded-xl border border-emerald-200 shadow-2xs bg-emerald-50/20">
+            <span className="text-2xs font-semibold uppercase text-emerald-700">Total Clicks</span>
+            <p className="text-xl font-bold text-emerald-800 mt-1">{stats.totalClicks.toLocaleString()}</p>
           </div>
         </div>
 
@@ -574,13 +588,14 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
                       <th className="py-3 px-4">Category</th>
                       <th className="py-3 px-4">Portal URL</th>
                       <th className="py-3 px-4">Status & Visibility</th>
+                      <th className="py-3 px-4 text-right">Clicks</th>
                       <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredServices.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center text-slate-500 text-sm">
+                        <td colSpan={6} className="py-8 text-center text-slate-500 text-sm">
                           No services match the current filters.
                         </td>
                       </tr>
@@ -677,6 +692,11 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
                                   </button>
                                 )}
                               </div>
+                            </td>
+
+                            {/* Click count */}
+                            <td className="py-3 px-4 text-right font-mono font-semibold text-slate-700">
+                              {(clickCounts[service.id] || 0).toLocaleString()}
                             </td>
 
                             {/* Actions */}
@@ -1113,7 +1133,7 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
           <ClicksInfographicsView
             services={services}
             clicks={clicks || []}
-            onRefreshClicks={onRefreshClicks || (() => {})}
+            onClearClicks={onClearClicks || (() => Promise.resolve())}
           />
         )}
 

@@ -21,7 +21,6 @@ export const createLandscapeLogoSvg = (
     </defs>
     <rect width="640" height="360" fill="url(#background)" />
     <circle cx="54" cy="48" r="7" fill="${escapeXml(accentColor || '#38bdf8')}" />
-    <text x="74" y="54" fill="#ffffff" font-size="16" font-family="sans-serif" font-weight="600">CU SERVICES</text>
     <text x="40" y="190" fill="#ffffff" font-size="30" font-family="sans-serif" font-weight="700">${escapeXml(title)}</text>
     <text x="40" y="235" fill="#ffffff" fill-opacity="0.85" font-size="16" font-family="sans-serif">${escapeXml(subtitle)}</text>
     <rect x="40" y="310" width="120" height="4" rx="2" fill="${escapeXml(accentColor || '#38bdf8')}" />

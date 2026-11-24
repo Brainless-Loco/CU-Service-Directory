@@ -35,7 +35,7 @@ import { NoticeModal } from './components/NoticeModal';
 import { UserModal } from './components/UserModal';
 import { GroupModal } from './components/GroupModal';
 import { Footer } from './components/Footer';
-import { getStoredClicks, recordServiceClick, clearRecordedClicks } from './services/clickTrackingService';
+import { recordServiceClick, clearRecordedClicks } from './services/clickTrackingService';
 import { getStoredHealthStatuses, pingServicePortal, pingAllServices } from './services/healthCheckService';
 import { getStoredAuditLogs, recordAuditLog, resetAuditLogs } from './services/auditLogService';
 import { loadPersistedFonts, persistFontSettings, applyFontsGlobally } from './config/fonts';
@@ -103,7 +103,7 @@ export default function App() {
   const [groupToEdit, setGroupToEdit] = useState<ServiceGroup | null>(null);
 
   // Click tracking state
-  const [clicks, setClicks] = useState<ServiceClickEvent[]>(() => getStoredClicks());
+  const [clicks, setClicks] = useState<ServiceClickEvent[]>([]);
 
   // Health status state (200 OK pinging)
   const [healthStatuses, setHealthStatuses] = useState<Record<string, ServiceHealthStatus>>(() =>
@@ -184,19 +184,20 @@ export default function App() {
   const handleTrackClick = (service: ServiceItem) => {
     const recorded = recordServiceClick(service.id, service.title, service.portalUrl);
     setClicks((prev) => [recorded, ...prev]);
-    api.recordClick(recorded).catch((error) => console.error('Failed to record click with API', error));
+    api.recordClick(recorded)
+      .then((savedClick) => {
+        setClicks((prev) => prev.map((click) => click.id === recorded.id ? savedClick : click));
+      })
+      .catch((error) => console.error('Failed to record click with API', error));
   };
 
-  const handleRefreshClicks = async () => {
+  const handleClearClicks = async () => {
     if (adminAuth.token) {
-      try {
-        setClicks(await api.getClicks(adminAuth.token));
-        return;
-      } catch (error) {
-        console.error('Failed to refresh clicks from API', error);
-      }
+      await api.clearClicks(adminAuth.token);
+    } else {
+      clearRecordedClicks();
     }
-    setClicks(getStoredClicks());
+    setClicks([]);
   };
 
   // Health check ping handlers
@@ -267,6 +268,21 @@ export default function App() {
   const handleLoginSuccess = (auth: AdminAuthState) => {
     setAdminAuth(auth);
     localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(auth));
+
+    if (auth.token) {
+      api.getAdminBootstrap(auth.token)
+        .then((data) => {
+          setServices(data.services);
+          setGroups(data.groups);
+          setNotices(data.notices);
+          setUsers(data.users);
+          setClicks(data.clicks);
+          setAuditLogs(data.auditLogs);
+          setHealthStatuses(data.healthStatuses);
+          if (data.fontSettings) setFontSettings(data.fontSettings);
+        })
+        .catch((error) => console.error('Failed to load admin data after sign-in', error));
+    }
     
     // Record login audit event
     const log = recordAuditLog({
@@ -343,7 +359,9 @@ export default function App() {
     });
     setAuditLogs((prev) => [log, ...prev]);
     if (adminAuth.token) {
-      api.save('services', savedService, adminAuth.token).catch((error) => console.error('Failed to save service', error));
+      api.save<ServiceItem>('services', savedService, adminAuth.token)
+        .then((saved) => setServices((prev) => prev.map((service) => service.id === savedService.id ? saved : service)))
+        .catch((error) => console.error('Failed to save service', error));
     }
   };
 
@@ -430,7 +448,9 @@ export default function App() {
     });
     setAuditLogs((prev) => [log, ...prev]);
     if (adminAuth.token) {
-      api.save('notices', savedNotice, adminAuth.token).catch((error) => console.error('Failed to save notice', error));
+      api.save<PortalNotice>('notices', savedNotice, adminAuth.token)
+        .then((saved) => setNotices((prev) => prev.map((notice) => notice.id === savedNotice.id ? saved : notice)))
+        .catch((error) => console.error('Failed to save notice', error));
     }
   };
 
@@ -520,7 +540,9 @@ export default function App() {
     });
     setAuditLogs((prev) => [log, ...prev]);
     if (adminAuth.token) {
-      api.save('users', savedUser, adminAuth.token).catch((error) => console.error('Failed to save user', error));
+      api.save<AdminUser>('users', savedUser, adminAuth.token)
+        .then((saved) => setUsers((prev) => prev.map((user) => user.id === savedUser.id ? saved : user)))
+        .catch((error) => console.error('Failed to save user', error));
     }
   };
 
@@ -606,7 +628,9 @@ export default function App() {
     });
     setAuditLogs((prev) => [log, ...prev]);
     if (adminAuth.token) {
-      api.save('groups', savedGroup, adminAuth.token).catch((error) => console.error('Failed to save group', error));
+      api.save<ServiceGroup>('groups', savedGroup, adminAuth.token)
+        .then((saved) => setGroups((prev) => prev.map((group) => group.id === savedGroup.id ? saved : group)))
+        .catch((error) => console.error('Failed to save group', error));
     }
   };
 
@@ -718,7 +742,7 @@ export default function App() {
           healthStatuses={healthStatuses}
           fontSettings={fontSettings}
           auditLogs={auditLogs}
-          onRefreshClicks={handleRefreshClicks}
+          onClearClicks={handleClearClicks}
           onUpdateFontSettings={handleUpdateFontSettings}
           onPingService={handlePingService}
           onPingAllServices={handlePingAllServices}
@@ -990,12 +1014,11 @@ export default function App() {
                   </div>
 
                   {/* Service Cards Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {groupServices.map((service) => (
                       <ServiceCard
                         key={service.id}
                         service={service}
-                        group={group}
                         isAdmin={adminAuth.isAuthenticated}
                         healthStatus={healthStatuses[service.id]}
                         clickCount={clicks.filter((c) => c.serviceId === service.id).length}
@@ -1037,12 +1060,11 @@ export default function App() {
             </div>
 
             {filteredServices.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredServices.map((service) => (
                   <ServiceCard
                     key={service.id}
                     service={service}
-                    group={groups.find((g) => g.id === service.groupId)}
                     isAdmin={adminAuth.isAuthenticated}
                     healthStatus={healthStatuses[service.id]}
                     clickCount={clicks.filter((c) => c.serviceId === service.id).length}

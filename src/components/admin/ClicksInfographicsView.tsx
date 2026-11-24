@@ -17,19 +17,18 @@ import {
 import { ServiceClickEvent, ServiceItem } from '../../types';
 import {
   computeClickStats,
-  clearRecordedClicks,
 } from '../../services/clickTrackingService';
 
 interface ClicksInfographicsViewProps {
   services: ServiceItem[];
   clicks: ServiceClickEvent[];
-  onRefreshClicks: () => void;
+  onClearClicks: () => Promise<void>;
 }
 
 export const ClicksInfographicsView: React.FC<ClicksInfographicsViewProps> = ({
   services,
   clicks,
-  onRefreshClicks,
+  onClearClicks,
 }) => {
   const [timeRange, setTimeRange] = useState<'7d' | '14d' | '30d'>('14d');
   const [streamFilter, setStreamFilter] = useState('');
@@ -57,8 +56,7 @@ export const ClicksInfographicsView: React.FC<ClicksInfographicsViewProps> = ({
 
   const handleClearClicks = () => {
     if (window.confirm('Are you sure you want to reset all click logs and infographic statistics?')) {
-      clearRecordedClicks();
-      onRefreshClicks();
+      onClearClicks().catch((error) => console.error('Failed to clear click history', error));
     }
   };
 

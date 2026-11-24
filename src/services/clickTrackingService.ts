@@ -1,7 +1,5 @@
 import { ServiceClickEvent } from '../types';
 
-export const STORAGE_KEY_CLICKS = 'cu_services_clicks_v3';
-
 // Helper to determine device type
 const getDeviceType = (): 'desktop' | 'mobile' | 'tablet' => {
   if (typeof window === 'undefined') return 'desktop';
@@ -9,25 +7,6 @@ const getDeviceType = (): 'desktop' | 'mobile' | 'tablet' => {
   if (/tablet|ipad|playbook|silk/i.test(ua)) return 'tablet';
   if (/mobile|iphone|ipod|android|blackberry|mini|windows\sce|palm/i.test(ua)) return 'mobile';
   return 'desktop';
-};
-
-/**
- * Load locally cached click events.
- */
-export const getStoredClicks = (): ServiceClickEvent[] => {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY_CLICKS);
-    if (saved !== null) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.error('Failed to load stored clicks', e);
-  }
-
-  return [];
 };
 
 /**
@@ -47,14 +26,6 @@ export const recordServiceClick = (
     deviceType: getDeviceType(),
   };
 
-  try {
-    const existing = getStoredClicks();
-    const updated = [newEvent, ...existing].slice(0, 5000); // retain up to 5000 recent clicks
-    localStorage.setItem(STORAGE_KEY_CLICKS, JSON.stringify(updated));
-  } catch (e) {
-    console.error('Failed to record click event', e);
-  }
-
   return newEvent;
 };
 
@@ -62,11 +33,6 @@ export const recordServiceClick = (
  * Clear all recorded clicks to empty array
  */
 export const clearRecordedClicks = (): ServiceClickEvent[] => {
-  try {
-    localStorage.setItem(STORAGE_KEY_CLICKS, JSON.stringify([]));
-  } catch (e) {
-    console.error('Failed to clear clicks', e);
-  }
   return [];
 };
 

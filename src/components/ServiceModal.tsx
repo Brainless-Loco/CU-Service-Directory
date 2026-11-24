@@ -92,13 +92,13 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
 
   if (!isOpen) return null;
 
-  const wordValidation = validateWordCount(description, 50);
+  const wordValidation = validateWordCount(description, 30);
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
-    const testValidation = validateWordCount(val, 50);
-    if (testValidation.count > 50) {
-      setDescription(truncateToMaxWords(val, 50));
+    const testValidation = validateWordCount(val, 30);
+    if (testValidation.count > 30) {
+      setDescription(truncateToMaxWords(val, 30));
     } else {
       setDescription(val);
     }
@@ -162,7 +162,7 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
     }
 
     if (wordValidation.isOverLimit) {
-      setFormError('Description exceeds the maximum allowed 50 words.');
+      setFormError('Description exceeds the maximum allowed 30 words.');
       return;
     }
 
@@ -590,23 +590,23 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
             )}
           </div>
 
-          {/* Description with Strict 50-Word Limit */}
+          {/* Description with Strict 30-Word Limit */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-semibold text-slate-700">
-                Service Description (Max 50 words) <span className="text-rose-500">*</span>
+                Service Description (Max 30 words) <span className="text-rose-500">*</span>
               </label>
               <span
                 id="word-count-badge"
                 className={`text-2xs font-bold px-2 py-0.5 rounded ${
-                  wordValidation.count > 50
+                  wordValidation.count > 30
                     ? 'bg-rose-100 text-rose-700'
-                    : wordValidation.count > 40
+                    : wordValidation.count > 24
                     ? 'bg-amber-100 text-amber-800'
                     : 'bg-slate-100 text-slate-600'
                 }`}
               >
-                {wordValidation.count} / 50 words
+                {wordValidation.count} / 30 words
               </span>
             </div>
             <textarea
@@ -621,7 +621,7 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
             <div className="flex items-center justify-between text-2xs text-slate-600 mt-1">
               <span>{wordValidation.remaining} words remaining</span>
               {wordValidation.isOverLimit && (
-                <span className="text-rose-600 font-semibold">Exceeds 50 words limit!</span>
+                <span className="text-rose-600 font-semibold">Exceeds 30 words limit!</span>
               )}
             </div>
           </div>

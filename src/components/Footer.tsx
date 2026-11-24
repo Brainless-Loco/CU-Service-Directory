@@ -75,32 +75,22 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <a
+                  href="https://ictcell.cu.ac.bd"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-emerald-700 flex items-center gap-1 transition-colors"
+                >
+                  ICT Cell Portal <ExternalLink className="w-3 h-3 text-slate-400" />
+                </a>
+              </li>
+              <li>
+                <a
                   href="https://admission.cu.ac.bd"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-emerald-700 flex items-center gap-1 transition-colors"
                 >
                   Undergraduate Admission Portal <ExternalLink className="w-3 h-3 text-slate-400" />
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://library.cu.ac.bd"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-emerald-700 flex items-center gap-1 transition-colors"
-                >
-                  CU Central Library <ExternalLink className="w-3 h-3 text-slate-400" />
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://research.cu.ac.bd"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-emerald-700 flex items-center gap-1 transition-colors"
-                >
-                  Research Repository <ExternalLink className="w-3 h-3 text-slate-400" />
                 </a>
               </li>
             </ul>

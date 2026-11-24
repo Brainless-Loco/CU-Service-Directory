@@ -14,7 +14,7 @@ export type ServiceStatus = 'ACTIVE' | 'DISABLED' | 'COMING_SOON';
 export interface ServiceItem {
   id: string;
   title: string;
-  description: string; // Max 50 words enforced
+  description: string; // Admin input is limited to 30 words.
   groupId: string;
   portalUrl?: string; // Optional for COMING_SOON
   logoUrl: string; // URL link or base64 data string

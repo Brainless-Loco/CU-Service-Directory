@@ -59,7 +59,6 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(click),
   }),
-  getClicks: (token: string) => request<ServiceClickEvent[]>('/admin/clicks', {}, token),
   clearClicks: (token: string) => request<void>('/admin/clicks', { method: 'DELETE' }, token),
   getAuditLogs: (token: string) => request<AdminAuditLog[]>('/admin/audit-logs', {}, token),
   clearAuditLogs: (token: string) => request<void>('/admin/audit-logs', { method: 'DELETE' }, token),

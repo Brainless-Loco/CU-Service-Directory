@@ -106,6 +106,9 @@ app.post('/api/auth/login', (request, response) => {
     return response.status(401).json({ error: 'Invalid administrative credentials.' });
   }
 
+  matchedUser.lastLogin = timestamp();
+  saveRecord('users', matchedUser);
+
   const token = crypto.randomBytes(32).toString('hex');
   const auth = {
     isAuthenticated: true,
@@ -113,7 +116,7 @@ app.post('/api/auth/login', (request, response) => {
     role: matchedUser.role,
     fullName: matchedUser.fullName,
     token,
-    lastLogin: timestamp(),
+    lastLogin: matchedUser.lastLogin,
   };
   tokens.set(token, auth);
   addAuditLog({
@@ -159,19 +162,19 @@ for (const [collection, config] of Object.entries(collectionConfig)) {
     if (!item?.id) return response.status(400).json({ error: 'A record id is required.' });
 
     const exists = Boolean(getRecord(table, item.id));
-    saveRecord(table, item);
+    const savedItem = saveRecord(table, item);
     const auditDetails = collection === 'users'
-      ? { ...item, passwordPlain: '***' }
-      : item;
+      ? { ...savedItem, passwordPlain: '***' }
+      : savedItem;
     addAuditLog({
       userEmail: request.adminUser.userEmail,
       action: exists ? config.update : config.create,
       targetTable: table,
-      targetId: item.id,
+      targetId: savedItem.id,
       details: auditDetails,
       ipAddress: request.ip,
     });
-    response.json(item);
+    response.json(savedItem);
   });
 
   app.delete(`/api/admin/${collection}/:id`, ...authorization, (request, response) => {
@@ -225,11 +228,12 @@ app.post('/api/clicks', (request, response) => {
     id: request.body?.id || `click-${Date.now()}`,
     timestamp: request.body?.timestamp || timestamp(),
     ipAddress: request.ip,
+    userAgent: request.get('user-agent') || null,
   };
-  saveRecord('service_clicks', click);
+  const savedClick = saveRecord('service_clicks', click);
   const clicks = getRecords('service_clicks');
   for (const oldClick of clicks.slice(5000)) deleteRecord('service_clicks', oldClick.id);
-  response.status(201).json(click);
+  response.status(201).json(savedClick);
 });
 
 app.get('/api/admin/clicks', requireAuth, (_request, response) => {
