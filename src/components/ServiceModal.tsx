@@ -10,6 +10,7 @@ interface ServiceModalProps {
   onSave: (service: ServiceItem) => void;
   serviceToEdit?: ServiceItem | null;
   groups: ServiceGroup[];
+  services: ServiceItem[];
 }
 
 export const ServiceModal: React.FC<ServiceModalProps> = ({
@@ -18,6 +19,7 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
   onSave,
   serviceToEdit,
   groups,
+  services,
 }) => {
   const [title, setTitle] = useState('');
   const [groupId, setGroupId] = useState(groups[0]?.id || '');
@@ -30,7 +32,13 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
   const [badgeText, setBadgeText] = useState('');
   const [tagsInput, setTagsInput] = useState('');
   const [status, setStatus] = useState<ServiceStatus>('ACTIVE');
+  const [displayOrder, setDisplayOrder] = useState('1');
+  const [displayOrderTouched, setDisplayOrderTouched] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const getNextDisplayOrder = (targetGroupId: string) => services
+    .filter((service) => service.groupId === targetGroupId)
+    .reduce((highest, service) => Math.max(highest, service.displayOrder ?? 0), 0) + 1;
 
   const COLOR_PALETTE = [
     { name: 'CU Emerald', hex: '#064e3b' },
@@ -71,12 +79,17 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
       setBadgeText(serviceToEdit.badgeText || '');
       setTagsInput(serviceToEdit.tags ? serviceToEdit.tags.join(', ') : '');
       setStatus(serviceToEdit.status || 'ACTIVE');
+      setDisplayOrder(String(serviceToEdit.displayOrder ?? 0));
+      setDisplayOrderTouched(false);
       const isSvgPreset = serviceToEdit.logoUrl.startsWith('data:image/svg+xml');
       const isUpload = serviceToEdit.logoUrl.startsWith('data:image/') && !isSvgPreset;
       setLogoInputType(isSvgPreset ? 'preset' : isUpload ? 'upload' : 'url');
     } else {
       setTitle('');
-      setGroupId(groups[0]?.id || '');
+      const initialGroupId = groups[0]?.id || '';
+      setGroupId(initialGroupId);
+      setDisplayOrder(String(getNextDisplayOrder(initialGroupId)));
+      setDisplayOrderTouched(false);
       setPortalUrl('');
       setDescription('');
       setLogoRatio('16:9');
@@ -166,6 +179,12 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
       return;
     }
 
+    const parsedDisplayOrder = Number(displayOrder);
+    if (!Number.isSafeInteger(parsedDisplayOrder) || parsedDisplayOrder < 0) {
+      setFormError('Display order must be a non-negative whole number.');
+      return;
+    }
+
     const tags = tagsInput
       .split(',')
       .map((t) => t.trim())
@@ -183,6 +202,7 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
       tags,
       badgeText: badgeText.trim() || (isComingSoon ? 'Coming Soon' : undefined),
       status,
+      displayOrder: parsedDisplayOrder,
       updatedAt: new Date().toISOString(),
     };
 
@@ -287,7 +307,7 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
           </div>
 
           {/* Title & Category Group */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Portal Service Title <span className="text-rose-500">*</span>
@@ -310,7 +330,13 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
               <select
                 id="service-group-select"
                 value={groupId}
-                onChange={(e) => setGroupId(e.target.value)}
+                onChange={(e) => {
+                  const nextGroupId = e.target.value;
+                  setGroupId(nextGroupId);
+                  if (!serviceToEdit && !displayOrderTouched) {
+                    setDisplayOrder(String(getNextDisplayOrder(nextGroupId)));
+                  }
+                }}
                 className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors text-slate-900"
               >
                 {groups.map((grp) => (
@@ -319,6 +345,26 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="service-display-order-input">
+                Display Order in Category
+              </label>
+              <input
+                id="service-display-order-input"
+                type="number"
+                min="0"
+                step="1"
+                required
+                value={displayOrder}
+                onChange={(e) => {
+                  setDisplayOrder(e.target.value);
+                  setDisplayOrderTouched(true);
+                }}
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors text-slate-900"
+              />
+              <p className="mt-1 text-2xs text-slate-500">Lower numbers appear first in this category.</p>
             </div>
           </div>
 

@@ -183,6 +183,7 @@ const mapService = (row) => ({
   badgeText: row.badge_text || undefined,
   status: row.status,
   isFeatured: Boolean(row.is_featured),
+  displayOrder: row.display_order,
   updatedAt: row.updated_at,
 });
 

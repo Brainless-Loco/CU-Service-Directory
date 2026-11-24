@@ -777,6 +777,7 @@ export default function App() {
 
   // Filtered Services for Public Search / Category View
   const filteredServices = useMemo(() => {
+    const groupOrderById = new Map(groups.map((group) => [group.id, group.order] as const));
     return portalVisibleServices.filter((s) => {
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
@@ -789,8 +790,14 @@ export default function App() {
       const matchesGroup = activeGroupId === 'all' || s.groupId === activeGroupId;
 
       return matchesSearch && matchesGroup;
+    }).sort((a, b) => {
+      if (activeGroupId === 'all') {
+        const groupOrderDifference = (groupOrderById.get(a.groupId) ?? 0) - (groupOrderById.get(b.groupId) ?? 0);
+        if (groupOrderDifference !== 0) return groupOrderDifference;
+      }
+      return (a.displayOrder ?? 0) - (b.displayOrder ?? 0);
     });
-  }, [portalVisibleServices, searchQuery, activeGroupId]);
+  }, [portalVisibleServices, searchQuery, activeGroupId, groups]);
 
   // Grouped Services for organized display
   const sortedGroups = useMemo(() => {
@@ -845,6 +852,7 @@ export default function App() {
           onSave={handleSaveService}
           serviceToEdit={serviceToEdit}
           groups={groups}
+          services={services}
         />
 
         <NoticeModal
@@ -1033,7 +1041,9 @@ export default function App() {
           /* Render grouped sections clearly as requested: "shown in cards with groups such as Student Services - There will be Institutional Email Service, Alias Email Service and so on." */
           <div className="space-y-12">
             {sortedGroups.map((group) => {
-              const groupServices = portalVisibleServices.filter((s) => s.groupId === group.id);
+              const groupServices = portalVisibleServices
+                .filter((s) => s.groupId === group.id)
+                .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
               if (groupServices.length === 0) return null;
 
               return (
@@ -1190,6 +1200,7 @@ export default function App() {
         onSave={handleSaveService}
         serviceToEdit={serviceToEdit}
         groups={groups}
+        services={services}
       />
 
       {/* Notice Broadcast Modal */}

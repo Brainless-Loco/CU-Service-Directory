@@ -24,6 +24,7 @@ export interface ServiceItem {
   isFeatured?: boolean;
   status: ServiceStatus;
   badgeText?: string;
+  displayOrder?: number;
   updatedAt: string;
 }
 
