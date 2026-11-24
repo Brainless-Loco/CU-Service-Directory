@@ -139,11 +139,11 @@ export const NoticeBanner: React.FC<NoticeBannerProps> = ({ notices }) => {
 
         {/* Right action link and controls */}
         <div className="flex items-center gap-2.5 shrink-0 self-end md:self-center">
-          {currentNotice.endTime && (
+          {/* {currentNotice.endTime && (
             <span className="hidden lg:inline text-2xs text-slate-500">
               Valid until {formatEndDate(currentNotice.endTime)}
             </span>
-          )}
+          )} */}
 
           {currentNotice.linkUrl && (
             <a

@@ -1,4 +1,5 @@
 import { ServiceItem, ServiceHealthStatus } from '../types';
+import { api } from './api';
 
 const STORAGE_KEY_HEALTH = 'cu_services_health_status_v3';
 
@@ -41,13 +42,12 @@ export const saveHealthStatuses = (statuses: Record<string, ServiceHealthStatus>
 };
 
 /**
- * Ping an individual web portal URL from the client side.
- * Uses fetch with timeout and fallback heuristics for cross-origin portals.
+ * Requests an exact HTTP status check from the API, which can read cross-origin responses.
  */
 export const pingServicePortal = async (
   serviceId: string,
   url: string,
-  timeoutMs: number = 4000
+  token: string
 ): Promise<ServiceHealthStatus> => {
   if (!isPingableWebLink(url)) {
     return {
@@ -61,83 +61,30 @@ export const pingServicePortal = async (
     };
   }
 
-  const startTime = performance.now();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    // Mode 'no-cors' allows us to send a network probe to external universities / domains.
-    // An opaque response proves network reachability, DNS resolution, and TCP/TLS handshake success.
-    const response = await fetch(url, {
-      method: 'HEAD',
-      mode: 'no-cors',
-      cache: 'no-cache',
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-    const latency = Math.round(performance.now() - startTime);
-
-    // If fetch succeeds (even with opaque response in browser), the remote host responded!
-    // In browser no-cors mode, response.type is 'opaque' with status 0, representing a successful network round-trip.
-    const isOk = response.type === 'opaque' || (response.status >= 200 && response.status < 400);
-
-    return {
-      serviceId,
-      portalUrl: url,
-      isLive: true,
-      statusCode: response.status === 0 ? '200 OK' : `${response.status} OK`,
-      latencyMs: Math.max(latency, 24),
-      lastChecked: new Date().toISOString(),
-    };
-  } catch (err: any) {
-    clearTimeout(timeoutId);
-    const latency = Math.round(performance.now() - startTime);
-
-    const isTimeout = err.name === 'AbortError' || latency >= timeoutMs;
-    const errorMsg = isTimeout
-      ? 'Connection timed out (>4000ms)'
-      : err.message || 'Remote server unreachable / down';
-
-    return {
-      serviceId,
-      portalUrl: url,
-      isLive: false,
-      statusCode: isTimeout ? 'TIMEOUT' : 'DOWN (503/Offline)',
-      latencyMs: latency,
-      lastChecked: new Date().toISOString(),
-      errorMessage: errorMsg,
-    };
-  }
+  const status = await api.checkServiceHealth(serviceId, token);
+  saveHealthStatuses({ ...getStoredHealthStatuses(), [serviceId]: status });
+  return status;
 };
 
 /**
- * Ping all active services concurrently or with slight stagger to avoid browser throttling
+ * Requests the API to check active portals and persists the returned statuses locally.
  */
 export const pingAllServices = async (
   services: ServiceItem[],
-  onProgress?: (completed: number, total: number) => void
+  onProgress?: (completed: number, total: number) => void,
+  token?: string
 ): Promise<Record<string, ServiceHealthStatus>> => {
   const pingable = services.filter((s) => s.status === 'ACTIVE' && isPingableWebLink(s.portalUrl));
-  const currentStored = getStoredHealthStatuses();
-  const results: Record<string, ServiceHealthStatus> = { ...currentStored };
+  if (pingable.length === 0) return {};
 
-  let completed = 0;
-  const total = pingable.length;
-
-  // Run in parallel chunks of 4 to be gentle on browser connection limits
-  const chunkSize = 4;
-  for (let i = 0; i < pingable.length; i += chunkSize) {
-    const chunk = pingable.slice(i, i + chunkSize);
-    const chunkPromises = chunk.map(async (service) => {
-      const res = await pingServicePortal(service.id, service.portalUrl!);
-      results[service.id] = res;
-      completed++;
-      if (onProgress) onProgress(completed, total);
-    });
-    await Promise.all(chunkPromises);
-  }
-
-  saveHealthStatuses(results);
-  return results;
+  const results = token
+    ? await api.checkAllHealthStatuses(token)
+    : await api.getPublicHealthStatuses();
+  const pingableIds = new Set(pingable.map((service) => service.id));
+  const checkedStatuses = Object.fromEntries(
+    Object.entries(results).filter(([serviceId]) => pingableIds.has(serviceId))
+  );
+  saveHealthStatuses({ ...getStoredHealthStatuses(), ...checkedStatuses });
+  onProgress?.(pingable.length, pingable.length);
+  return checkedStatuses;
 };

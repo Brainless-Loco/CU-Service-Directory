@@ -36,7 +36,7 @@ import { UserModal } from './components/UserModal';
 import { GroupModal } from './components/GroupModal';
 import { Footer } from './components/Footer';
 import { recordServiceClick, clearRecordedClicks } from './services/clickTrackingService';
-import { getStoredHealthStatuses, pingServicePortal, pingAllServices } from './services/healthCheckService';
+import { getStoredHealthStatuses, isPingableWebLink, pingServicePortal, pingAllServices } from './services/healthCheckService';
 import { getStoredAuditLogs, recordAuditLog, resetAuditLogs } from './services/auditLogService';
 import { loadPersistedFonts, persistFontSettings, applyFontsGlobally } from './config/fonts';
 import { api } from './services/api';
@@ -173,12 +173,62 @@ export default function App() {
     }
   }, [currentRoute, adminAuth.isAuthenticated]);
 
-  // Initial network health probe for active web services
+  // Check active portals after the public service list has loaded.
   useEffect(() => {
-    pingAllServices(services).then((results) => {
-      setHealthStatuses((prev) => ({ ...prev, ...results }));
+    const pingableServices = services.filter(
+      (service) => service.status === 'ACTIVE' && isPingableWebLink(service.portalUrl)
+    );
+    if (pingableServices.length === 0) return;
+
+    let active = true;
+    const checkedAt = new Date().toISOString();
+    setHealthStatuses((previous) => {
+      const next = { ...previous };
+      pingableServices.forEach((service) => {
+        next[service.id] = {
+          ...previous[service.id],
+          serviceId: service.id,
+          portalUrl: service.portalUrl!,
+          isLive: previous[service.id]?.isLive || false,
+          statusCode: 'CHECKING',
+          latencyMs: previous[service.id]?.latencyMs || 0,
+          lastChecked: checkedAt,
+          isChecking: true,
+        };
+      });
+      return next;
     });
-  }, []);
+
+    pingAllServices(services)
+      .then((results) => {
+        if (active) setHealthStatuses((previous) => ({ ...previous, ...results }));
+      })
+      .catch((error) => {
+        console.error('Failed to check portal health on load', error);
+        if (!active) return;
+        setHealthStatuses((previous) => {
+          const next = { ...previous };
+          pingableServices.forEach((service) => {
+            next[service.id] = {
+              ...previous[service.id],
+              serviceId: service.id,
+              portalUrl: service.portalUrl!,
+              isLive: false,
+              statusCode: 'CHECK_FAILED',
+              latencyMs: previous[service.id]?.latencyMs || 0,
+              lastChecked: new Date().toISOString(),
+              isChecking: false,
+              errorMessage: 'The health check service could not be reached.',
+            };
+          });
+          return next;
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [services]);
 
   // Click tracking handler
   const handleTrackClick = (service: ServiceItem) => {
@@ -202,6 +252,11 @@ export default function App() {
 
   // Health check ping handlers
   const handlePingService = async (serviceId: string, url: string) => {
+    if (!adminAuth.token) {
+      console.error('Cannot check portal health without an admin token.');
+      return;
+    }
+
     setHealthStatuses((prev) => ({
       ...prev,
       [serviceId]: {
@@ -217,20 +272,36 @@ export default function App() {
       },
     }));
 
-    const res = await pingServicePortal(serviceId, url);
-    setHealthStatuses((prev) => ({ ...prev, [serviceId]: res }));
-    if (adminAuth.token) {
-      api.saveHealthStatuses({ ...healthStatuses, [serviceId]: res }, adminAuth.token)
-        .catch((error) => console.error('Failed to save health status', error));
+    try {
+      const res = await pingServicePortal(serviceId, url, adminAuth.token);
+      setHealthStatuses((prev) => ({ ...prev, [serviceId]: res }));
+    } catch (error) {
+      console.error('Failed to check service health', error);
+      setHealthStatuses((prev) => ({
+        ...prev,
+        [serviceId]: {
+          ...prev[serviceId],
+          serviceId,
+          portalUrl: url,
+          isLive: false,
+          statusCode: 'CHECK_FAILED',
+          latencyMs: prev[serviceId]?.latencyMs || 0,
+          lastChecked: new Date().toISOString(),
+          isChecking: false,
+          errorMessage: 'The health check service could not be reached.',
+        },
+      }));
     }
   };
 
   const handlePingAllServices = async () => {
-    const results = await pingAllServices(services);
-    setHealthStatuses(results);
     if (adminAuth.token) {
-      api.saveHealthStatuses(results, adminAuth.token)
-        .catch((error) => console.error('Failed to save health statuses', error));
+      try {
+        const results = await pingAllServices(services, undefined, adminAuth.token);
+        setHealthStatuses(results);
+      } catch (error) {
+        console.error('Failed to check all service health statuses', error);
+      }
     }
   };
 

@@ -42,6 +42,7 @@ const request = async <T>(path: string, options: RequestInit = {}, token?: strin
 
 export const api = {
   getPublicBootstrap: () => request<PublicBootstrap>('/bootstrap'),
+  getPublicHealthStatuses: () => request<Record<string, ServiceHealthStatus>>('/health-checks'),
   login: (email: string, password: string) => request<AdminAuthState>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
@@ -73,4 +74,12 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(statuses),
   }, token),
+  checkAllHealthStatuses: (token: string) => request<Record<string, ServiceHealthStatus>>('/admin/health-checks', {
+    method: 'POST',
+  }, token),
+  checkServiceHealth: (serviceId: string, token: string) => request<ServiceHealthStatus>(
+    `/admin/health-checks/${encodeURIComponent(serviceId)}`,
+    { method: 'POST' },
+    token
+  ),
 };

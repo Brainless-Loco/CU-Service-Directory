@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import crypto from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import {
   clearRecords,
   deleteRecord,
@@ -67,8 +69,170 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+const HEALTH_CHECK_TIMEOUT_MS = 4000;
+const HEALTH_STATUS_CACHE_MS = 15000;
+let publicHealthStatusCache = null;
+let publicHealthStatusCacheExpiresAt = 0;
+let publicHealthStatusRefresh = null;
+let healthStatusCacheVersion = 0;
+
+const invalidateHealthStatusCache = () => {
+  healthStatusCacheVersion += 1;
+  publicHealthStatusCache = null;
+  publicHealthStatusCacheExpiresAt = 0;
+  publicHealthStatusRefresh = null;
+};
+
+const isPublicAddress = (address) => {
+  const version = isIP(address);
+  if (version === 4) {
+    const [first, second, third] = address.split('.').map(Number);
+    return first !== 0
+      && first !== 10
+      && first !== 127
+      && first < 224
+      && !(first === 169 && second === 254)
+      && !(first === 172 && second >= 16 && second <= 31)
+      && !(first === 192 && second === 168)
+      && !(first === 100 && second >= 64 && second <= 127)
+      && !(first === 192 && second === 0 && third === 0)
+      && !(first === 192 && second === 0 && third === 2)
+      && !(first === 192 && second === 88 && third === 99)
+      && !(first === 198 && (second === 18 || second === 19))
+      && !(first === 198 && second === 51 && third === 100)
+      && !(first === 203 && second === 0 && third === 113);
+  }
+
+  if (version === 6) {
+    const normalized = address.toLowerCase();
+    if (normalized.startsWith('::ffff:')) {
+      return isPublicAddress(normalized.slice(7));
+    }
+    const firstSegment = Number.parseInt(normalized.split(':')[0] || '0', 16);
+    return firstSegment >= 0x2000
+      && firstSegment <= 0x3fff
+      && !normalized.startsWith('2001:db8:');
+  }
+
+  return false;
+};
+
+const validateHealthTarget = async (portalUrl) => {
+  const target = new URL(portalUrl);
+  if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password || target.port) {
+    throw new Error('Only public HTTP/HTTPS portals on standard ports can be checked.');
+  }
+
+  const hostname = target.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (hostname === 'localhost' || /\.(localhost|local|internal|test)$/.test(hostname)) {
+    throw new Error('Portal URL must resolve to a public host.');
+  }
+
+  const addresses = isIP(hostname)
+    ? [{ address: hostname }]
+    : await lookup(hostname, { all: true, verbatim: true });
+  if (!addresses.length || addresses.some(({ address }) => !isPublicAddress(address))) {
+    throw new Error('Portal URL must resolve only to public IP addresses.');
+  }
+
+  return target.href;
+};
+
+const checkServiceHealth = async (service) => {
+  const portalUrl = service.portalUrl || '';
+  const checkedAt = timestamp();
+  const startedAt = Date.now();
+  const baseStatus = {
+    serviceId: service.id,
+    portalUrl,
+    isLive: false,
+    statusCode: 'DOWN',
+    latencyMs: 0,
+    lastChecked: checkedAt,
+  };
+
+  if (!portalUrl) {
+    return { ...baseStatus, statusCode: 'N/A (No Web Link)', errorMessage: 'No portal URL is configured.' };
+  }
+
+  try {
+    const target = await validateHealthTarget(portalUrl);
+    const response = await fetch(target, {
+      method: 'HEAD',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
+    });
+    const isLive = response.status === 200;
+    return {
+      ...baseStatus,
+      isLive,
+      statusCode: response.status,
+      latencyMs: Date.now() - startedAt,
+      errorMessage: isLive ? undefined : `Expected HTTP 200; received HTTP ${response.status}.`,
+    };
+  } catch (error) {
+    const isTimeout = error.name === 'TimeoutError' || error.name === 'AbortError';
+    const isTargetBlocked = error.message.startsWith('Only public') || error.message.startsWith('Portal URL');
+    return {
+      ...baseStatus,
+      statusCode: isTimeout ? 'TIMEOUT' : isTargetBlocked ? 'BLOCKED_TARGET' : 'DOWN',
+      latencyMs: Date.now() - startedAt,
+      errorMessage: isTimeout ? 'Connection timed out.' : error.message,
+    };
+  }
+};
+
+const runHealthChecks = async () => {
+  const activeServices = getRecords('services').filter(
+    (service) => service.status === 'ACTIVE' && /^https?:\/\//i.test(service.portalUrl || '')
+  );
+  const statuses = {};
+  const chunkSize = 4;
+
+  for (let index = 0; index < activeServices.length; index += chunkSize) {
+    const chunk = activeServices.slice(index, index + chunkSize);
+    const results = await Promise.all(chunk.map((service) => checkServiceHealth(service)));
+    results.forEach((result) => {
+      statuses[result.serviceId] = result;
+    });
+  }
+
+  saveSetting('healthStatuses', statuses);
+  return statuses;
+};
+
+const getPublicHealthStatuses = async () => {
+  if (publicHealthStatusCache && Date.now() < publicHealthStatusCacheExpiresAt) {
+    return publicHealthStatusCache;
+  }
+  if (!publicHealthStatusRefresh) {
+    const version = healthStatusCacheVersion;
+    const refresh = runHealthChecks()
+      .then((statuses) => {
+        if (version === healthStatusCacheVersion) {
+          publicHealthStatusCache = statuses;
+          publicHealthStatusCacheExpiresAt = Date.now() + HEALTH_STATUS_CACHE_MS;
+        }
+        return statuses;
+      })
+      .finally(() => {
+        if (publicHealthStatusRefresh === refresh) publicHealthStatusRefresh = null;
+      });
+    publicHealthStatusRefresh = refresh;
+  }
+  return publicHealthStatusRefresh;
+};
+
 app.get('/api/health', (_request, response) => {
   response.json({ status: 'ok', timestamp: timestamp(), database: 'sqlite' });
+});
+
+app.get('/api/health-checks', async (_request, response, next) => {
+  try {
+    response.json(await getPublicHealthStatuses());
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/bootstrap', (_request, response) => {
@@ -163,6 +327,7 @@ for (const [collection, config] of Object.entries(collectionConfig)) {
 
     const exists = Boolean(getRecord(table, item.id));
     const savedItem = saveRecord(table, item);
+    if (collection === 'services') invalidateHealthStatusCache();
     const auditDetails = collection === 'users'
       ? { ...savedItem, passwordPlain: '***' }
       : savedItem;
@@ -182,6 +347,7 @@ for (const [collection, config] of Object.entries(collectionConfig)) {
     if (!existing) return response.status(404).json({ error: 'Record not found.' });
 
     deleteRecord(table, request.params.id);
+    if (collection === 'services') invalidateHealthStatusCache();
     addAuditLog({
       userEmail: request.adminUser.userEmail,
       action: config.delete,
@@ -209,6 +375,7 @@ app.post('/api/admin/reset', requireAuth, requireSuperAdmin, (request, response)
   clearRecords('portal_notices');
   clearRecords('service_clicks');
   clearRecords('admin_audit_logs');
+  invalidateHealthStatusCache();
   saveSetting('fontSettings', null);
   saveSetting('healthStatuses', {});
   addAuditLog({
@@ -260,6 +427,33 @@ app.put('/api/admin/font-settings', requireAuth, (request, response) => {
 
 app.put('/api/admin/health-statuses', requireAuth, (request, response) => {
   response.json(saveSetting('healthStatuses', request.body || {}));
+});
+
+app.post('/api/admin/health-checks', requireAuth, async (_request, response, next) => {
+  try {
+    invalidateHealthStatusCache();
+    const statuses = await runHealthChecks();
+    publicHealthStatusCache = statuses;
+    publicHealthStatusCacheExpiresAt = Date.now() + HEALTH_STATUS_CACHE_MS;
+    response.json(statuses);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/health-checks/:serviceId', requireAuth, async (request, response, next) => {
+  try {
+    const service = getRecords('services').find((item) => item.id === request.params.serviceId);
+    if (!service) return response.status(404).json({ error: 'Service not found.' });
+
+    const status = await checkServiceHealth(service);
+    const statuses = { ...getSetting('healthStatuses', {}), [status.serviceId]: status };
+    saveSetting('healthStatuses', statuses);
+    invalidateHealthStatusCache();
+    response.json(status);
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.use((error, _request, response, _next) => {

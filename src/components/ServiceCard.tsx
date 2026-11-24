@@ -64,7 +64,10 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
   const isDisabled = service.status === 'DISABLED';
   const isWebUrl = isPingableWebLink(service.portalUrl);
   const hasUrl = Boolean(service.portalUrl && service.portalUrl.trim() !== '' && service.portalUrl !== 'https://');
-  const isOnline = isWebUrl && healthStatus ? healthStatus.isLive : true;
+  const isConfirmedLive = healthStatus?.isLive === true && healthStatus.statusCode === 200;
+  const isHealthDown = Boolean(
+    healthStatus && !healthStatus.isLive && !healthStatus.isChecking && healthStatus.statusCode !== 'CHECK_FAILED'
+  );
   const descriptionWordCount = countWords(service.description);
   const displayDescription = truncateToMaxWords(service.description, 50);
 
@@ -76,9 +79,9 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
           ? 'border-slate-300 opacity-60 bg-slate-50/50'
           : isComingSoon
           ? 'border-amber-300/80 hover:border-amber-400 hover:shadow-md'
-          : isWebUrl && healthStatus && healthStatus.isLive
+          : isWebUrl && isConfirmedLive
           ? 'border-emerald-300 hover:border-emerald-400 ring-1 ring-emerald-500/20 hover:shadow-md'
-          : isWebUrl && healthStatus && !healthStatus.isLive
+          : isWebUrl && isHealthDown
           ? 'border-rose-300 hover:border-rose-400 ring-1 ring-rose-500/20 hover:shadow-md'
           : 'border-slate-200 hover:border-slate-300 hover:shadow-md'
       }`}
@@ -136,7 +139,14 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
                 <RefreshCw className="w-2.5 h-2.5 animate-spin text-slate-500" />
                 <span>Pinging...</span>
               </span>
-            ) : healthStatus?.isLive ? (
+            ) : healthStatus?.statusCode === 'CHECK_FAILED' ? (
+              <span
+                className="px-2 py-0.5 text-2xs font-semibold bg-slate-100 text-slate-600 rounded shadow-xs border border-slate-200"
+                title={healthStatus.errorMessage || 'Portal health could not be checked'}
+              >
+                Status Unknown
+              </span>
+            ) : isConfirmedLive ? (
               <span
                 className="px-2 py-0.5 text-2xs font-bold bg-emerald-500/95 text-white backdrop-blur-xs rounded shadow-xs flex items-center gap-1"
                 title={`200 OK Active • Latency: ${healthStatus.latencyMs}ms`}
@@ -144,7 +154,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
                 <span>Live</span>
               </span>
-            ) : healthStatus && !healthStatus.isLive ? (
+            ) : isHealthDown ? (
               <span
                 className="px-2 py-0.5 text-2xs font-bold bg-rose-600/95 text-white backdrop-blur-xs rounded shadow-xs flex items-center gap-1"
                 title={healthStatus.errorMessage || 'Portal connection failed or timed out'}
@@ -153,9 +163,9 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
                 <span>Down</span>
               </span>
             ) : (
-              <span className="px-2 py-0.5 text-2xs font-semibold bg-emerald-600/90 text-white backdrop-blur-xs rounded shadow-xs flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-200"></span>
-                <span>Live Portal</span>
+              <span className="px-2 py-0.5 text-2xs font-semibold bg-slate-100 text-slate-600 rounded shadow-xs border border-slate-200 flex items-center gap-1">
+                <RefreshCw className="w-2.5 h-2.5 text-slate-500" />
+                <span>Checking...</span>
               </span>
             )
           )}
@@ -292,12 +302,12 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
               className={`flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs sm:text-sm font-semibold text-white rounded-lg transition-colors group/btn shadow-2xs ${
                 isComingSoon
                   ? 'bg-amber-600 hover:bg-amber-700'
-                  : healthStatus && !healthStatus.isLive
+                  : isHealthDown
                   ? 'bg-rose-700 hover:bg-rose-800'
                   : 'bg-slate-900 hover:bg-emerald-700'
               }`}
             >
-              <span>{isComingSoon ? 'Visit Preview' : healthStatus && !healthStatus.isLive ? 'Visit (Down Alert)' : 'Visit Portal'}</span>
+              <span>{isComingSoon ? 'Visit Preview' : isHealthDown ? 'Visit (Down Alert)' : 'Visit Portal'}</span>
               <ArrowUpRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform" />
             </a>
           ) : (

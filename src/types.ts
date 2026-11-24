@@ -40,7 +40,7 @@ export interface ServiceClickEvent {
 export interface ServiceHealthStatus {
   serviceId: string;
   portalUrl: string;
-  isLive: boolean; // 200 OK / reachable
+  isLive: boolean; // True only when the portal returns HTTP 200.
   statusCode: number | string; // e.g. 200, 'ERR_OFFLINE', 'TIMEOUT'
   latencyMs: number;
   lastChecked: string;
